@@ -13,6 +13,7 @@ Estructura de hoja NOM XX:
 """
 
 import re
+import unicodedata
 from decimal import Decimal
 from pathlib import Path
 from typing import List, Optional
@@ -22,6 +23,21 @@ from loguru import logger
 
 from src.entrada.normalizacion import normalizar_monto
 from src.models import DatosNomina, LineaContable
+
+
+def _normalizar_texto(texto: str) -> str:
+    """Normaliza texto: quita acentos, puntos, y pasa a mayusculas.
+
+    Ej: 'Séptimo día' → 'SEPTIMO DIA'
+        'I.S.R. (mes)' → 'ISR (MES)'
+        'Préstamo infonavit (FD)' → 'PRESTAMO INFONAVIT (FD)'
+    """
+    # Quitar acentos
+    nfkd = unicodedata.normalize('NFKD', texto)
+    sin_acentos = ''.join(c for c in nfkd if not unicodedata.combining(c))
+    # Quitar puntos
+    sin_puntos = sin_acentos.replace('.', '')
+    return sin_puntos.upper().strip()
 
 
 # Mapeo de percepciones: concepto → (cuenta, subcuenta)
@@ -43,7 +59,9 @@ PERCEPCIONES_CUENTAS = {
 DEDUCCIONES_CUENTAS = {
     'INFONAVIT VIVIENDA': ('2140', '270000'),
     'INFONAVIT FD': ('2140', '270000'),
+    'INFONAVIT (FD)': ('2140', '270000'),
     'INFONAVIT CF': ('2140', '270000'),
+    'INFONAVIT (CF)': ('2140', '270000'),
     'ISR': ('2140', '020000'),
     'ISR (MES)': ('2140', '020000'),
     'IMSS': ('2140', '010000'),
@@ -81,8 +99,7 @@ def parsear_nomina(ruta: Path) -> Optional[DatosNomina]:
     totales = _extraer_totales(ws)
 
     # Extraer percepciones y deducciones del detalle
-    percepciones = _extraer_percepciones(ws)
-    deducciones = _extraer_deducciones(ws)
+    percepciones, deducciones = _extraer_percepciones_deducciones(ws)
 
     wb.close()
 
@@ -133,9 +150,17 @@ def _buscar_hoja_nomina(wb) -> Optional[str]:
 
 
 def _extraer_totales(ws) -> dict:
-    """Extrae totales de las filas resumen (73-84).
+    """Extrae totales de las filas resumen (73-90).
 
-    Busca por etiquetas en columna B/C para ser robusto ante cambios de fila.
+    Estructura real del Excel CONTPAQi:
+      - Fila 74: col I='DISPERSION', col J=monto
+      - Fila 75: col I='CHEQUES', col J=monto
+      - Fila 80: col A='VACACIONES PAGADAS' (encabezado)
+      - Fila 81: col J=monto vacaciones (fila de detalle)
+      - Fila 83: col A='FINIQUITOS PAGADOS' (encabezado)
+      - Fila 84: col J=monto finiquito (fila de detalle)
+
+    Busca etiquetas en columnas A, B, C, I para ser robusto.
     """
     totales = {
         'dispersion': Decimal('0'),
@@ -145,52 +170,125 @@ def _extraer_totales(ws) -> dict:
     }
 
     # Buscar en rango amplio (filas 70-90)
-    for fila in range(70, 91):
-        etiqueta = _celda_str(ws, 'B', fila) or _celda_str(ws, 'C', fila) or ''
-        etiqueta_upper = etiqueta.upper().strip()
+    fila_vacaciones = None
+    fila_finiquito = None
 
-        # Valor tipicamente en columna H o I (neto)
+    for fila in range(70, 91):
+        # Buscar etiqueta en todas las columnas relevantes
+        etiqueta = ''
+        for col in ('A', 'B', 'C', 'I'):
+            val = _celda_str(ws, col, fila)
+            if val and len(val.strip()) > 2:
+                etiqueta = val.upper().strip()
+                break
+
+        # Monto en columna J (principal) o H, I, K como fallback
         monto = None
-        for col in ('H', 'I', 'J', 'K'):
+        for col in ('J', 'H', 'I', 'K'):
             monto = normalizar_monto(_celda(ws, col, fila))
             if monto is not None and monto > 0:
                 break
 
+        # Etiquetas de sección (VACACIONES PAGADAS, FINIQUITOS PAGADOS)
+        # marcan que la SIGUIENTE fila con datos tiene el monto
+        if 'VACACION' in etiqueta and 'PAGAD' in etiqueta:
+            fila_vacaciones = fila
+            continue
+        elif 'FINIQ' in etiqueta and 'PAGAD' in etiqueta:
+            fila_finiquito = fila
+            continue
+
         if monto is None or monto <= 0:
             continue
 
-        if 'DISPER' in etiqueta_upper:
+        if 'DISPER' in etiqueta:
             totales['dispersion'] = monto
-        elif 'CHEQUE' in etiqueta_upper and 'FINIQ' not in etiqueta_upper:
+        elif 'CHEQUE' in etiqueta and 'FINIQ' not in etiqueta:
             totales['cheques'] = monto
-        elif 'VACACION' in etiqueta_upper:
+        elif fila_vacaciones and fila == fila_vacaciones + 1:
             totales['vacaciones'] = monto
-        elif 'FINIQ' in etiqueta_upper:
+        elif fila_finiquito and fila == fila_finiquito + 1:
             totales['finiquito'] = monto
 
     return totales
 
 
-def _extraer_percepciones(ws) -> List[LineaContable]:
-    """Extrae percepciones de la nomina buscando conceptos conocidos."""
+def _extraer_percepciones_deducciones(ws) -> tuple:
+    """Extrae percepciones y deducciones de la nomina.
+
+    Estructura del Excel CONTPAQi (NOM XX):
+      - Fila 5: Headers de columnas (C=Sueldo, D=Séptimo día, etc.)
+      - Fila 73: Totales por columna (suma de todos los empleados)
+
+    Lee los headers de fila 5, busca conceptos conocidos en PERCEPCIONES_CUENTAS
+    y DEDUCCIONES_CUENTAS, y extrae los totales de fila 73.
+
+    Returns:
+        Tupla (percepciones, deducciones) como listas de LineaContable.
+    """
     percepciones = []
-
-    # Las percepciones estan tipicamente en las filas de totales (73-78)
-    # con el desglose en columnas especificas.
-    # Por ahora extraemos lo que podemos de la estructura conocida.
-    # TODO: Ajustar una vez veamos la estructura real del archivo
-
-    return percepciones
-
-
-def _extraer_deducciones(ws) -> List[LineaContable]:
-    """Extrae deducciones de la nomina buscando conceptos conocidos."""
     deducciones = []
 
-    # Similar a percepciones, necesita ajuste con archivo real
-    # TODO: Ajustar una vez veamos la estructura real del archivo
+    # Buscar la fila de totales: primera fila despues de los empleados
+    # donde columna A no tiene numero de empleado y columna C tiene valor
+    fila_totales = None
+    for fila in range(70, 91):
+        val_a = ws[f'A{fila}'].value
+        val_c = ws[f'C{fila}'].value
+        # Fila de totales: no tiene codigo de empleado en A, pero tiene montos en C+
+        if val_a is None and val_c is not None:
+            monto = normalizar_monto(val_c)
+            if monto is not None and monto > 0:
+                fila_totales = fila
+                break
 
-    return deducciones
+    if fila_totales is None:
+        return percepciones, deducciones
+
+    # Leer headers de fila 5 y totales de la fila encontrada
+    for col in 'CDEFGHIJK':
+        header = _celda_str(ws, col, 5)
+        if not header:
+            continue
+
+        monto = normalizar_monto(_celda(ws, col, fila_totales))
+        if monto is None or monto <= 0:
+            continue
+
+        header_norm = _normalizar_texto(header)
+
+        # Buscar en percepciones
+        cuenta_info = None
+        for concepto, cta in PERCEPCIONES_CUENTAS.items():
+            if concepto in header_norm or header_norm in concepto:
+                cuenta_info = cta
+                break
+
+        if cuenta_info:
+            percepciones.append(LineaContable(
+                cuenta=cuenta_info[0],
+                subcuenta=cuenta_info[1],
+                concepto=header.strip(),
+                monto=monto,
+            ))
+            continue
+
+        # Buscar en deducciones
+        cuenta_info = None
+        for concepto, cta in DEDUCCIONES_CUENTAS.items():
+            if concepto in header_norm or header_norm in concepto:
+                cuenta_info = cta
+                break
+
+        if cuenta_info:
+            deducciones.append(LineaContable(
+                cuenta=cuenta_info[0],
+                subcuenta=cuenta_info[1],
+                concepto=header.strip(),
+                monto=monto,
+            ))
+
+    return percepciones, deducciones
 
 
 def _celda(ws, col: str, fila: int):

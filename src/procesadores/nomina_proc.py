@@ -236,6 +236,18 @@ def _generar_poliza_principal(
     cta_banco = CuentasContables.BANCO_EFECTIVO
     cta_acreedores = ('2120', '040000')  # Acreedores Diversos Nomina
 
+    # Total que deben sumar las percepciones para que la poliza cuadre:
+    # percepciones = deducciones + banco (dispersion) + acreedores (cheques + vac + finiq)
+    total_deducciones = sum(d.monto for d in datos_nomina.deducciones)
+    monto_acreedores_esperado = (
+        datos_nomina.total_cheques
+        + datos_nomina.total_vacaciones
+        + datos_nomina.total_finiquito
+    )
+    total_percepciones_esperado = (
+        total_deducciones + datos_nomina.total_dispersion + monto_acreedores_esperado
+    )
+
     # --- Cargos: Percepciones ---
     if datos_nomina.percepciones:
         for perc in datos_nomina.percepciones:
@@ -251,19 +263,30 @@ def _generar_poliza_principal(
                 concepto=f"{concepto} {perc.concepto}",
             ))
             mov_num += 1
+
+        # Cuadre: si las percepciones del Excel no cubren el total esperado,
+        # agregar linea de ajuste (conceptos no desglosados en el Excel)
+        total_percepciones_actual = sum(p.monto for p in datos_nomina.percepciones)
+        faltante = total_percepciones_esperado - total_percepciones_actual
+        if faltante > Decimal('0.01'):
+            lineas.append(LineaPoliza(
+                movimiento=mov_num,
+                cuenta='6200',
+                subcuenta='010000',
+                tipo_ca=TipoCA.CARGO,
+                cargo=faltante,
+                abono=Decimal('0'),
+                concepto=f"{concepto} Otras percepciones",
+            ))
+            mov_num += 1
     else:
         # Sin detalle: cargo generico a 6200/010000
-        total_percepciones = datos_nomina.total_neto
-        # Si tenemos deducciones, el total percepciones = neto + deducciones
-        total_deducciones = sum(d.monto for d in datos_nomina.deducciones)
-        total_percepciones = datos_nomina.total_neto + total_deducciones
-
         lineas.append(LineaPoliza(
             movimiento=mov_num,
             cuenta='6200',
             subcuenta='010000',
             tipo_ca=TipoCA.CARGO,
-            cargo=total_percepciones,
+            cargo=total_percepciones_esperado,
             abono=Decimal('0'),
             concepto=f"{concepto} SUELDOS Y SALARIOS",
         ))

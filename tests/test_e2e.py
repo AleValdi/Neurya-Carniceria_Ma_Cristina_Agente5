@@ -671,3 +671,162 @@ class TestE2EComparacionProduccion:
                 for resultado in resultados:
                     if resultado.exito:
                         limpiar_resultado(cursor, resultado)
+
+
+class TestE2ENomina:
+    """E2E: Nomina (semana 03, feb 2026)."""
+
+    def test_nomina_un_dia(self, connector, ruta_ec, ruta_nomina):
+        """Ejecuta nomina de 1 dia contra sandbox y verifica."""
+        from src.orquestador import procesar_nomina
+
+        # Dia 3 feb tiene NOMINA - PAGO DE NOMINA ($114,649.60)
+        fecha = date(2026, 2, 3)
+
+        resultados = procesar_nomina(
+            ruta_estado_cuenta=ruta_ec,
+            ruta_nomina=ruta_nomina,
+            dry_run=False,
+            solo_fecha=fecha,
+            connector=connector,
+        )
+
+        try:
+            exitosos = [r for r in resultados if r.exito]
+            assert len(exitosos) > 0, (
+                f"Ningun resultado exitoso. Errores: "
+                f"{[r.error for r in resultados if not r.exito]}"
+            )
+
+            for resultado in exitosos:
+                assert len(resultado.folios) > 0, "Sin folios creados"
+
+                for folio in resultado.folios:
+                    mov = verificar_movimiento(connector.db.conectar().cursor(), folio)
+                    assert mov, f"Folio {folio} no encontrado en BD"
+                    assert mov['Tipo'] == 2, "Nomina debe ser Tipo 2"
+                    assert mov['Cia'] == 'DCM'
+                    assert mov['Fuente'] == 'SAV7-CHEQUES'
+                    assert mov['Moneda'] == 'PESOS'
+                    assert mov['Capturo'] == 'AGENTE5'
+                    assert mov['Clase'] in ('NOMINA', 'FINIQUITO')
+
+                    assert mov['NumPoliza'] > 0, "Nomina debe tener poliza"
+
+                    # Poliza balanceada
+                    assert verificar_balance_poliza(
+                        connector.db.conectar().cursor(), folio
+                    ), f"Poliza desbalanceada para folio {folio}"
+
+                    lineas = verificar_poliza(connector.db.conectar().cursor(), folio)
+
+                    # Movimiento principal (dispersion) = mayor monto, poliza larga
+                    if 'DISPERSION' in mov['Concepto'].upper():
+                        assert len(lineas) >= 5, (
+                            f"Poliza dispersion debe tener >=5 lineas, tiene {len(lineas)}"
+                        )
+                    else:
+                        # Secundarios (cheques, vacaciones, finiquito): 2 lineas
+                        assert len(lineas) == 2, (
+                            f"Poliza secundaria debe tener 2 lineas, tiene {len(lineas)}"
+                        )
+
+        finally:
+            with connector.get_cursor(transaccion=True) as cursor:
+                for resultado in resultados:
+                    if resultado.exito:
+                        limpiar_resultado(cursor, resultado)
+
+
+class TestE2EImpuestos:
+    """E2E: Impuestos federales y estatal (enero 2026, pagados feb 11)."""
+
+    @pytest.fixture
+    def rutas_impuestos(self):
+        """Rutas a los PDFs de acuses de impuestos."""
+        base = ROOT / 'contexto' / 'impuestos'
+        rutas = {
+            'acuse_federal_1': base / 'ImpuestoFederal' / 'acusePdf-1011.pdf',
+            'acuse_federal_2': base / 'ImpuestoFederal' / 'Acuse.DCM02072238A.38.2026.pdf',
+            'detalle_ieps': base / 'ImpuestoFederal' / 'Declaracion.Acuse.0.pdf',
+            'declaracion_completa': base / 'ImpuestoFederal' / 'DCM02072238A.38.2026.pdf',
+            'estatal': base / 'ImpuestoEstatal' / '3% SN Enero 2026.pdf',
+        }
+        for nombre, ruta in rutas.items():
+            if not ruta.exists():
+                pytest.skip(f'PDF no disponible: {ruta}')
+        return rutas
+
+    def test_impuestos_completo(self, connector, ruta_ec, rutas_impuestos):
+        """Ejecuta impuestos de feb 11 contra sandbox y verifica."""
+        from src.orquestador import procesar_impuestos
+
+        fecha = date(2026, 2, 11)
+
+        resultados = procesar_impuestos(
+            ruta_estado_cuenta=ruta_ec,
+            ruta_acuse_federal_1=rutas_impuestos['acuse_federal_1'],
+            ruta_acuse_federal_2=rutas_impuestos['acuse_federal_2'],
+            ruta_detalle_ieps=rutas_impuestos['detalle_ieps'],
+            ruta_declaracion_completa=rutas_impuestos['declaracion_completa'],
+            ruta_impuesto_estatal=rutas_impuestos['estatal'],
+            dry_run=False,
+            solo_fecha=fecha,
+            connector=connector,
+        )
+
+        try:
+            exitosos = [r for r in resultados if r.exito]
+            assert len(exitosos) > 0, (
+                f"Ningun resultado exitoso. Errores: "
+                f"{[r.error for r in resultados if not r.exito]}"
+            )
+
+            folios_todos = []
+            for resultado in exitosos:
+                folios_todos.extend(resultado.folios)
+
+            # Debe haber al menos 3 folios:
+            # Federal 1a ($6,822) + Federal 2a principal + retenciones IVA + Estatal
+            assert len(folios_todos) >= 3, (
+                f"Impuestos deben generar >=3 folios, tiene {len(folios_todos)}"
+            )
+
+            for folio in folios_todos:
+                mov = verificar_movimiento(connector.db.conectar().cursor(), folio)
+                assert mov, f"Folio {folio} no encontrado en BD"
+                assert mov['Tipo'] == 2, "Impuestos deben ser Tipo 2"
+                assert mov['Cia'] == 'DCM'
+                assert mov['Fuente'] == 'SAV7-CHEQUES'
+                assert mov['Capturo'] == 'AGENTE5'
+                assert mov['TipoPoliza'] == 'EGRESO'
+                assert mov['TipoEgreso'] == 'TRANSFERENCIA'
+                assert mov['NumPoliza'] > 0
+
+                # Poliza balanceada
+                assert verificar_balance_poliza(
+                    connector.db.conectar().cursor(), folio
+                ), f"Poliza desbalanceada para folio {folio}"
+
+                # Verificar concepto contiene IMPUESTO o NOMINA (3%)
+                concepto = mov['Concepto'].upper()
+                assert 'IMPUESTO' in concepto or 'NOMINA' in concepto, (
+                    f"Concepto inesperado: {mov['Concepto']}"
+                )
+
+            # Verificar montos especificos en movimientos
+            montos = set()
+            for folio in folios_todos:
+                mov = verificar_movimiento(connector.db.conectar().cursor(), folio)
+                egreso = Decimal(str(mov['Egreso']))
+                montos.add(egreso)
+
+            # Deben estar los 3 montos principales
+            assert Decimal('6822') in montos, f"Falta federal 1a ($6,822). Montos: {montos}"
+            assert Decimal('22971') in montos, f"Falta estatal ($22,971). Montos: {montos}"
+
+        finally:
+            with connector.get_cursor(transaccion=True) as cursor:
+                for resultado in resultados:
+                    if resultado.exito:
+                        limpiar_resultado(cursor, resultado)

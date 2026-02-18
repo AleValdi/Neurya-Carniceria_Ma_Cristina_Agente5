@@ -138,7 +138,7 @@ class TestProcesadorNomina:
             l for l in plan.lineas_poliza[:lineas_principales]
             if l.cuenta == '6200' and l.tipo_ca == TipoCA.CARGO
         ]
-        assert len(cargos_6200) == 8  # 8 percepciones
+        assert len(cargos_6200) >= 8  # 8 percepciones + posible cuadre
 
     def test_poliza_principal_tiene_deducciones(self):
         """Poliza principal incluye abonos por deducciones."""
