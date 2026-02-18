@@ -395,12 +395,20 @@ para determinar cual es correcta.
 
 ---
 
+## Entorno de Desarrollo
+
+- **Virtual environment**: `venv/` en la raiz del proyecto
+- Activar: `source venv/bin/activate`
+- Instalar dependencias: `pip install -r requirements.txt`
+- **Siempre usar el venv** para ejecutar tests y scripts (el Python del sistema no tiene las dependencias)
+- Driver ODBC en Mac: `msodbcsql17` instalado via `brew install microsoft/mssql-release/msodbcsql17`
+
 ## Conexion a Base de Datos
 
 | Contexto | Host | Driver |
 |----------|------|--------|
 | Produccion (servidor) | `localhost` | SQL Server Native Client 11.0 |
-| Desarrollo (laptop/MCP) | `100.73.181.41` | SQL Server Native Client 11.0 (via Tailscale) |
+| Desarrollo (laptop/MCP) | `100.73.181.41` | ODBC Driver 17 for SQL Server (via Tailscale) |
 
 - **Credenciales**: `devsav7` / `devsav7`
 - **BD Sandbox/Pruebas**: `DBSAV71A` (default del MCP — lectura y escritura)
