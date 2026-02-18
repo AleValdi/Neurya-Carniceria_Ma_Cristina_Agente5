@@ -1,0 +1,2855 @@
+1
+00:00:00,000 --> 00:00:06,839
+mapeo vamos a revisar primero la conciliación de banco o la captura de las facturas yo creo
+
+2
+00:00:06,839 --> 00:00:11,279
+que bueno decidamos como parte de lo que hicimos la propuesta de la captura de las facturas del
+
+3
+00:00:11,279 --> 00:00:18,120
+sat posteriormente ya la conciliación del erp con tensa y la consideración de pagos contra el rp
+
+4
+00:00:18,120 --> 00:00:19,560
+contra el banco ok
+
+5
+00:00:28,100 --> 00:00:28,940
+no me veo
+
+6
+00:00:32,359 --> 00:00:33,780
+la práctica más grande
+
+7
+00:00:44,620 --> 00:00:47,240
+no puedes abrir bancos
+
+8
+00:00:48,119 --> 00:00:48,419
+e
+
+9
+00:00:58,399 --> 00:00:59,459
+los estados
+
+10
+00:01:02,799 --> 00:01:03,359
+y
+
+11
+00:01:12,439 --> 00:01:17,519
+es cuando hay una programación que aparecen nada más disponibles para afectar por eso
+
+12
+00:01:17,519 --> 00:01:18,099
+quería verlo de nuevo
+
+13
+00:01:18,439 --> 00:01:22,780
+que
+
+14
+00:01:22,780 --> 00:01:30,439
+quiero mostrarle cómo aparece la opción de afectar una vez que tu programa
+
+15
+00:01:34,620 --> 00:01:45,460
+buenos días está actualmente manejacos tres estados de cuenta de distribuidora es la primera
+
+16
+00:01:45,459 --> 00:01:47,779
+es la cuenta general, la cuenta de cheques,
+
+17
+00:01:47,899 --> 00:01:49,759
+la segunda nuestra tarjeta de débito
+
+18
+00:01:49,759 --> 00:01:53,899
+y la tercera nuestra cuenta de tarjetas.
+
+19
+00:01:56,639 --> 00:01:57,159
+¿Puedo?
+
+20
+00:01:58,679 --> 00:01:59,599
+¿Me vas a sacar?
+
+21
+00:02:13,180 --> 00:02:14,079
+Vamos a ver.
+
+22
+00:02:15,460 --> 00:02:15,900
+Se cerró.
+
+23
+00:02:17,099 --> 00:02:18,020
+¿Se guardó?
+
+24
+00:02:18,599 --> 00:02:19,580
+No sé, abro aquí.
+
+25
+00:02:20,800 --> 00:02:21,180
+Ahí está.
+
+26
+00:02:29,760 --> 00:02:31,140
+Vamos a apocar los arreglos.
+
+27
+00:02:31,780 --> 00:02:32,300
+Ok.
+
+28
+00:02:32,300 --> 00:02:32,340
+Ok.
+
+29
+00:02:42,260 --> 00:02:45,080
+Empezando por los egresos.
+
+30
+00:02:45,460 --> 00:02:48,520
+No, no puedo.
+
+31
+00:02:49,300 --> 00:02:50,040
+No te cae el tarot.
+
+32
+00:02:50,200 --> 00:02:51,180
+No, pues se guardó.
+
+33
+00:02:51,840 --> 00:02:52,159
+Ok.
+
+34
+00:02:52,700 --> 00:02:54,460
+Hay diferentes tipos de egresos.
+
+35
+00:02:54,659 --> 00:02:56,120
+Hay unos que se hacen manuales,
+
+36
+00:02:56,400 --> 00:02:58,780
+otros que se hacen a través de una programación
+
+37
+00:02:58,780 --> 00:03:02,200
+donde solo se afectan en SAP 7.
+
+38
+00:03:02,200 --> 00:03:05,319
+Los egresos manuales vienen siendo lo que son
+
+39
+00:03:05,319 --> 00:03:09,100
+pago de nómina, comisiones bancarias,
+
+40
+00:03:11,560 --> 00:03:15,240
+traspasos entre cuentas,
+
+41
+00:03:15,460 --> 00:03:25,860
+y los pagos de impuestos, los recursos,
+
+42
+00:03:25,860 --> 00:03:33,939
+y movimientos como devoluciones o pagos de tarjeta de crédito.
+
+43
+00:03:34,680 --> 00:03:36,840
+Todo eso sería manual.
+
+44
+00:03:38,180 --> 00:03:42,480
+Todo lo que es a través de nuestro sistema en automático
+
+45
+00:03:42,480 --> 00:03:44,520
+vienen siendo los pagos a proveedores.
+
+46
+00:03:44,520 --> 00:03:49,000
+Eso se genera una programación de pagos
+
+47
+00:03:49,000 --> 00:03:52,200
+y en automático en nuestro sistema
+
+48
+00:03:52,200 --> 00:04:03,620
+aparecen disponibles para la opción de afectar pagos.
+
+49
+00:04:05,000 --> 00:04:05,240
+¿Qué día?
+
+50
+00:04:05,240 --> 00:04:05,260
+¿Qué día?
+
+51
+00:04:08,360 --> 00:04:12,240
+Es el de...
+
+52
+00:04:14,520 --> 00:04:15,420
+¿Qué día?
+
+53
+00:04:15,420 --> 00:04:15,620
+¿Qué día?
+
+54
+00:04:15,620 --> 00:04:15,700
+¿Qué día?
+
+55
+00:04:15,700 --> 00:04:15,780
+¿Qué día?
+
+56
+00:04:16,860 --> 00:04:17,379
+Ok.
+
+57
+00:04:17,759 --> 00:04:20,960
+Por ejemplo, aquí están los pagos que hicimos ayer.
+
+58
+00:04:22,360 --> 00:04:25,040
+Este está programado, estuvo programado,
+
+59
+00:04:25,259 --> 00:04:28,620
+y lo único que hacemos en el sistema es darle conciliado y afectar.
+
+60
+00:04:29,360 --> 00:04:30,500
+Y con eso...
+
+61
+00:04:31,879 --> 00:04:36,420
+Y con eso se aplica un pago.
+
+62
+00:04:38,000 --> 00:04:41,439
+Todo esto lo vamos haciendo de acuerdo con el estado de cuenta.
+
+63
+00:04:43,439 --> 00:04:44,439
+El día 2...
+
+64
+00:04:44,519 --> 00:04:44,779
+El día 2, sí.
+
+65
+00:04:49,459 --> 00:04:51,899
+Todos estos ya se afectaron, ¿verdad?
+
+66
+00:04:53,439 --> 00:04:54,000
+Ok.
+
+67
+00:04:55,859 --> 00:04:58,240
+No tenemos tema en lo que es la programación,
+
+68
+00:04:58,459 --> 00:05:00,060
+porque en automático se afectan.
+
+69
+00:05:03,519 --> 00:05:06,439
+¿Qué es lo que quisieran ver en específico?
+
+70
+00:05:07,060 --> 00:05:12,319
+Bueno, mira, necesitamos conocer como tal el proceso completo donde inicia.
+
+71
+00:05:12,319 --> 00:05:14,199
+Como estoy viendo aquí, estás hablando en Excel.
+
+72
+00:05:14,519 --> 00:05:15,899
+Después, ¿qué es lo que haces?
+
+73
+00:05:16,079 --> 00:05:20,099
+Puedes dar la plataforma, tienes que darle clic aquí, meterte aquí,
+
+74
+00:05:20,359 --> 00:05:21,659
+y qué es lo que logras al final.
+
+75
+00:05:22,459 --> 00:05:24,919
+Necesitamos conocer como tal el proceso del paso a paso
+
+76
+00:05:24,919 --> 00:05:27,939
+para poder hacer un mapeo de esto
+
+77
+00:05:27,939 --> 00:05:30,180
+y tratar de integrar lo que es la gente en la empresa artificial
+
+78
+00:05:30,180 --> 00:05:33,740
+y pueden hacer lo que es este proceso de forma automática.
+
+79
+00:05:35,039 --> 00:05:37,180
+Entonces, conocer cuáles son las variables que tienes,
+
+80
+00:05:37,339 --> 00:05:41,539
+qué pasa cuando es un ejemplo en específico o surge algo.
+
+81
+00:05:41,799 --> 00:05:43,539
+Entonces, más que nada lo que tenemos que...
+
+82
+00:05:43,540 --> 00:05:45,840
+conocer esa parte.
+
+83
+00:05:46,920 --> 00:05:49,080
+Dulce, disculpen que interrumpa.
+
+84
+00:05:50,500 --> 00:05:53,540
+Acuérdate que primero es una programación de pagos.
+
+85
+00:05:53,960 --> 00:05:56,540
+Entramos primero a programación de pagos.
+
+86
+00:05:56,840 --> 00:06:01,680
+Ahí es donde tú seleccionas todas las facturas que vas a realizar el pago
+
+87
+00:06:02,020 --> 00:06:06,820
+para que después, teniendo ya la programación, generas un layout
+
+88
+00:06:07,400 --> 00:06:11,780
+y a partir de ahí empieza el proceso de pagos de facturas a proveedores
+
+89
+00:06:12,280 --> 00:06:13,120
+antes de...
+
+90
+00:06:13,120 --> 00:06:14,879
+de afectarlos en el banco.
+
+91
+00:06:14,879 --> 00:06:19,620
+Tú inicias seleccionando las facturas que vas a pagar
+
+92
+00:06:19,620 --> 00:06:22,120
+según fecha de vencimiento, ¿verdad?
+
+93
+00:06:24,120 --> 00:06:25,120
+Sí, por eso comentaba.
+
+94
+00:06:25,120 --> 00:06:27,500
+Primero empezamos con la programación de pagos.
+
+95
+00:06:29,240 --> 00:06:32,379
+Nada más métete al módulo de programación de pagos
+
+96
+00:06:32,740 --> 00:06:36,459
+para que veas desde dónde se seleccionan para que después...
+
+97
+00:06:36,459 --> 00:06:40,040
+Porque vienen primero de allá, antes de entrar en el banco, ¿verdad?
+
+98
+00:06:40,340 --> 00:06:42,800
+Antes de entrar a SAP Bancos vienen desde...
+
+99
+00:06:43,120 --> 00:06:45,120
+Desde pagos, desde compras.
+
+100
+00:06:46,920 --> 00:06:47,620
+Ok.
+
+101
+00:06:48,620 --> 00:06:49,959
+¿Me puedes hacer otra vez?
+
+102
+00:06:53,879 --> 00:06:54,379
+Sí.
+
+103
+00:06:54,379 --> 00:06:55,620
+Muchas gracias.
+
+104
+00:06:55,920 --> 00:06:56,920
+Muchas gracias.
+
+105
+00:06:56,920 --> 00:06:57,420
+Gracias.
+
+106
+00:07:02,740 --> 00:07:03,240
+Gracias.
+
+107
+00:07:04,500 --> 00:07:05,240
+No, eh...
+
+108
+00:07:06,000 --> 00:07:06,500
+Pero, eh...
+
+109
+00:07:06,500 --> 00:07:07,000
+No, no.
+
+110
+00:07:07,000 --> 00:07:07,500
+Eh...
+
+111
+00:07:07,500 --> 00:07:08,000
+No, no.
+
+112
+00:07:08,000 --> 00:07:08,500
+Ah, no.
+
+113
+00:07:08,500 --> 00:07:09,000
+Ah, no.
+
+114
+00:07:09,000 --> 00:07:09,500
+No.
+
+115
+00:07:09,500 --> 00:07:10,000
+No.
+
+116
+00:07:10,000 --> 00:07:10,500
+No.
+
+117
+00:07:10,500 --> 00:07:11,000
+No.
+
+118
+00:07:11,000 --> 00:07:11,500
+No.
+
+119
+00:07:11,500 --> 00:07:12,000
+No.
+
+120
+00:07:12,000 --> 00:07:12,500
+No.
+
+121
+00:07:12,500 --> 00:07:12,800
+No.
+
+122
+00:07:13,120 --> 00:07:14,500
+No.
+
+123
+00:07:14,500 --> 00:07:15,500
+No.
+
+124
+00:07:38,160 --> 00:07:38,660
+¿Si ve?
+
+125
+00:07:38,660 --> 00:07:40,699
+Sí, desde ahí.
+
+126
+00:07:40,699 --> 00:07:42,920
+Bueno, desde este módulo de compras...
+
+127
+00:07:43,120 --> 00:07:49,579
+ingresamos al apartado de pagos y ahí es donde se hace la programación para pagos.
+
+128
+00:07:51,519 --> 00:07:55,259
+Nosotros filtramos solamente la serie F, que vienen siendo las facturas.
+
+129
+00:07:57,220 --> 00:07:57,780
+Ok.
+
+130
+00:07:57,780 --> 00:08:05,780
+Y de ahí filtramos nuevamente, ordenamos todo según la fecha de pago.
+
+131
+00:08:07,639 --> 00:08:08,439
+Ok.
+
+132
+00:08:08,439 --> 00:08:20,879
+Entonces pues nos vamos hasta las más antiguas que ya deben de saldarse, deben de pagarse y vamos programando.
+
+133
+00:08:21,699 --> 00:08:23,879
+Vamos seleccionando por...
+
+134
+00:08:26,560 --> 00:08:29,300
+Con el F8 ya se van seleccionando.
+
+135
+00:08:30,659 --> 00:08:35,799
+Al final, no sé, ya son los pagos que voy a realizar.
+
+136
+00:08:36,700 --> 00:08:38,379
+Me voy a la pestaña de solicitud de pagos.
+
+137
+00:08:38,440 --> 00:08:43,940
+Y aquí me aparece nada más lo que yo programé para pago.
+
+138
+00:08:46,640 --> 00:08:50,100
+¿Estás programación de pago bajo qué criterio lo estás haciendo?
+
+139
+00:08:50,320 --> 00:08:53,780
+¿Qué es lo que revises para estar solicitando ese solicito de pago?
+
+140
+00:08:53,960 --> 00:08:55,700
+No solamente es el canal de los más anteriores.
+
+141
+00:08:56,240 --> 00:08:57,360
+¿Qué parámetros estás tomando?
+
+142
+00:08:57,360 --> 00:08:57,860
+La pestaña por fecha.
+
+143
+00:09:01,060 --> 00:09:02,060
+¿Qué rangos?
+
+144
+00:09:04,040 --> 00:09:05,440
+Pues se hacen por...
+
+145
+00:09:08,440 --> 00:09:12,320
+Por 15 o 21 días de crédito que es el que tenemos.
+
+146
+00:09:12,500 --> 00:09:12,920
+O 8.
+
+147
+00:09:13,460 --> 00:09:14,020
+Son 3.
+
+148
+00:09:14,380 --> 00:09:14,700
+15.
+
+149
+00:09:14,900 --> 00:09:16,000
+¿Algunos son de contado?
+
+150
+00:09:16,600 --> 00:09:16,900
+Ajá.
+
+151
+00:09:17,200 --> 00:09:20,520
+15, 8 y 21 días.
+
+152
+00:09:20,520 --> 00:09:22,880
+Son los rangos que por lo regular ocupamos.
+
+153
+00:09:23,460 --> 00:09:23,600
+Ok.
+
+154
+00:09:24,000 --> 00:09:27,900
+Depende del rango que tiene el crédito que tiene el proveedor.
+
+155
+00:09:28,200 --> 00:09:29,340
+Todos se manejan diferente.
+
+156
+00:09:34,300 --> 00:09:34,900
+Ok.
+
+157
+00:09:35,340 --> 00:09:37,520
+De ese como tal, ese rango...
+
+158
+00:09:38,440 --> 00:09:39,460
+¿Cómo lo checas tú?
+
+159
+00:09:39,540 --> 00:09:42,360
+¿En el mismo módulo te aparece ahí cuál es el rango?
+
+160
+00:09:42,600 --> 00:09:42,700
+Sí.
+
+161
+00:09:42,700 --> 00:09:43,000
+¿Qué?
+
+162
+00:09:44,000 --> 00:09:46,700
+Aquí en el módulo me está diciendo...
+
+163
+00:09:48,220 --> 00:09:52,820
+Por decir aquí en fecha de pago.
+
+164
+00:09:55,280 --> 00:09:55,800
+Ya.
+
+165
+00:09:56,720 --> 00:09:58,880
+Me está diciendo cuándo debo de pagarlo.
+
+166
+00:10:00,940 --> 00:10:07,920
+Y en caso de que ya esté vencido, aquí me aparece en la columna de vencimiento.
+
+167
+00:10:08,440 --> 00:10:11,520
+¿Cuántos días ya pasaron desde que tocaba el pago de ese proveedor?
+
+168
+00:10:11,940 --> 00:10:12,200
+Ya.
+
+169
+00:10:13,960 --> 00:10:18,580
+Nosotros previamente lo asignamos desde el catálogo de proveedores.
+
+170
+00:10:18,580 --> 00:10:22,740
+Ahí le asignamos cuántos días de crédito nos está dando el proveedor.
+
+171
+00:10:23,000 --> 00:10:27,660
+Entonces, en base a ese llenado del catálogo de los proveedores,
+
+172
+00:10:28,120 --> 00:10:32,300
+es que se van reflejando fechas de vencimiento según el tiempo.
+
+173
+00:10:32,800 --> 00:10:33,700
+Según el proveedor, claro.
+
+174
+00:10:33,920 --> 00:10:34,580
+Ok, perfecto.
+
+175
+00:10:36,240 --> 00:10:36,420
+Vale.
+
+176
+00:10:36,780 --> 00:10:38,300
+Entonces, primer paso, enterablemente, del SAP.
+
+177
+00:10:38,440 --> 00:10:44,860
+Filtrar por lo que son las series de facturas, orden y por este rango de fechas o días de vencimiento que tiene por cada proveedor.
+
+178
+00:10:46,560 --> 00:10:47,040
+Vale.
+
+179
+00:10:47,680 --> 00:10:47,880
+Sí.
+
+180
+00:10:47,880 --> 00:10:53,880
+Ya después de eso, ahora sí nos vamos al módulo de bancos.
+
+181
+00:10:57,780 --> 00:11:08,260
+Desde solicitud de pago, aquí nos vuelven a aparecer nuevamente los que programamos.
+
+182
+00:11:08,440 --> 00:11:10,880
+Desde pagos, desde el módulo de compras.
+
+183
+00:11:13,380 --> 00:11:17,980
+Este, aquí me aparece una pestañita donde voy a agregar todos.
+
+184
+00:11:20,680 --> 00:11:25,440
+Voy a, como tipo, confirmar que sí se van a pagar los que yo programé.
+
+185
+00:11:28,540 --> 00:11:31,780
+Después, a egresos, filtro por fecha.
+
+186
+00:11:31,780 --> 00:11:31,820
+Filtro por fecha.
+
+187
+00:11:31,820 --> 00:11:42,560
+Y nuevamente me aparecen las que yo programé y confirmé que sí se iban a pagar.
+
+188
+00:11:45,340 --> 00:11:52,000
+El saldo, pues, debe ser el mismo que yo tengo acá en programación de pago.
+
+189
+00:11:52,620 --> 00:11:53,640
+En solicitud de pago.
+
+190
+00:11:55,720 --> 00:11:58,380
+Son 11,075, 11,075.
+
+191
+00:11:59,380 --> 00:12:00,620
+Y la acción del banco.
+
+192
+00:12:01,260 --> 00:12:01,800
+Ahí donde está.
+
+193
+00:12:01,820 --> 00:12:01,860
+Sí.
+
+194
+00:12:04,160 --> 00:12:13,520
+Después de eso, ya nuevamente confirmamos y seleccionamos los que se van a exportar para la IAO del banco.
+
+195
+00:12:18,840 --> 00:12:26,340
+Y finalmente se genera el archivo para el banco.
+
+196
+00:12:26,340 --> 00:12:27,340
+Y me...
+
+197
+00:12:31,820 --> 00:12:38,760
+, arroja en automático un Excel donde viene la información de lo que, de lo que se está pagando.
+
+198
+00:12:39,980 --> 00:12:49,660
+Y aquí, pues, para confirmar nada más, pues, puedo ver las cantidades, los totales, que sea, que sea lo mismo que yo tengo en programación.
+
+199
+00:12:53,840 --> 00:12:54,280
+Ok.
+
+200
+00:12:54,440 --> 00:12:56,820
+Y ahí, y ahí termina una programación de pago.
+
+201
+00:12:58,820 --> 00:13:00,100
+Y después...
+
+202
+00:13:01,820 --> 00:13:08,080
+Y ahí te generó un TXT para subirlo al banco, ¿verdad?
+
+203
+00:13:11,020 --> 00:13:15,260
+Sí, ese es el que pasó a la chica encargada y ya lo sube al banco.
+
+204
+00:13:19,000 --> 00:13:19,400
+Ok.
+
+205
+00:13:19,400 --> 00:13:19,480
+Ok.
+
+206
+00:13:19,480 --> 00:13:19,560
+Ok.
+
+207
+00:13:19,560 --> 00:13:21,560
+Ok.
+
+208
+00:13:21,560 --> 00:13:23,560
+Ok.
+
+209
+00:13:23,560 --> 00:13:25,560
+Ok.
+
+210
+00:13:25,560 --> 00:13:27,560
+Ok.
+
+211
+00:13:27,560 --> 00:13:29,560
+Ok.
+
+212
+00:13:29,560 --> 00:13:31,560
+Ok.
+
+213
+00:13:31,560 --> 00:13:31,640
+Ok.
+
+214
+00:13:31,639 --> 00:13:31,679
+Ok.
+
+215
+00:13:31,679 --> 00:13:31,939
+Ok.
+
+216
+00:13:31,939 --> 00:13:32,179
+Ok.
+
+217
+00:13:32,179 --> 00:13:37,179
+Ok.
+
+218
+00:13:37,860 --> 00:13:39,059
+Ok.
+
+219
+00:13:39,059 --> 00:13:44,039
+Ok.
+
+220
+00:13:44,039 --> 00:13:44,740
+Ok.
+
+221
+00:13:44,740 --> 00:13:45,419
+Ok.
+
+222
+00:13:45,419 --> 00:13:47,980
+Ok.
+
+223
+00:13:47,980 --> 00:13:48,019
+Ok.
+
+224
+00:13:48,019 --> 00:13:48,580
+Ok.
+
+225
+00:13:48,580 --> 00:13:53,179
+Ya que están hechos los pagos, te regresas de nuevo a donde está el banco, y afectas todas
+
+226
+00:13:53,179 --> 00:13:54,620
+las facturas para que ya se generen lasólizas contables.
+
+227
+00:13:54,620 --> 00:13:55,759
+Así.
+
+228
+00:13:55,759 --> 00:13:56,720
+Y ahí es donde ya se marcan cómo afectan todas las facturas donde están confirmadas.
+
+229
+00:13:56,720 --> 00:13:56,879
+Ojalá sean mediadas.
+
+230
+00:13:56,879 --> 00:13:57,120
+Si tienen 10 cargadores o fuera de esa organización, y seая si estaban colocados por Caq y los吃.
+
+231
+00:13:57,120 --> 00:13:57,159
+Claro.
+
+232
+00:13:57,159 --> 00:13:57,519
+Y ellos también ya están en una organización en la organización sustentable no Warshift.
+
+233
+00:13:57,519 --> 00:13:57,799
+Sin embargo, eseidoוךismo normalmente está másumer que en cualquier otro lugar de la economía.
+
+234
+00:13:57,799 --> 00:13:58,039
+Entonces podríamos no utilizar este binarias en duda.
+
+235
+00:13:58,039 --> 00:14:11,179
+y ahí es donde ya se marcan como afectados y ya te aparece como un egreso, una póliza de egresos, se generan las pólizas de egresos.
+
+236
+00:14:13,379 --> 00:14:23,819
+Sí, de aquí empezamos a trabajar con lo que es el estado de cuenta del banco, lo descargamos desde la banca, lo pegamos en nuestro papel de trabajo que es este Excel
+
+237
+00:14:23,820 --> 00:14:29,879
+y confirmamos que todos estos movimientos estén en nuestro sistema.
+
+238
+00:14:30,440 --> 00:14:37,780
+Empezamos con los egresos, todos estos egresos tienen que estar en el módulo de bancos.
+
+239
+00:14:37,780 --> 00:14:48,040
+Aquí están nuestras tres cuentas activas, por ejemplo la cuenta 17, es la cuenta de cheques.
+
+240
+00:14:52,960 --> 00:14:53,680
+Entramos.
+
+241
+00:14:53,820 --> 00:14:55,200
+Al mes correspondiente.
+
+242
+00:14:57,780 --> 00:14:58,820
+Somos egresos.
+
+243
+00:15:02,740 --> 00:15:05,680
+¿De qué día fueron los programas ahorita?
+
+244
+00:15:05,960 --> 00:15:06,740
+Del 3 de mayo.
+
+245
+00:15:07,320 --> 00:15:13,140
+Y un ejemplo, una vez pagadas en nuestro estado de cuenta nos van a aparecer estos tres pagos.
+
+246
+00:15:13,800 --> 00:15:14,520
+Ingresamos.
+
+247
+00:15:15,879 --> 00:15:17,720
+Le damos conciliado y afectar.
+
+248
+00:15:23,820 --> 00:15:25,740
+¿Qué serían estos movimientos?
+
+249
+00:15:28,060 --> 00:15:32,780
+Todo lo que son pago a proveedores se hace por medio de la programación.
+
+250
+00:15:33,580 --> 00:15:37,460
+Hay pagos que se tienen que hacer manuales.
+
+251
+00:15:38,800 --> 00:15:43,360
+Porque no tenemos una factura, por ejemplo el registro de nómina.
+
+252
+00:15:43,740 --> 00:15:51,380
+El registro de nómina sacamos un reporte, una lista de raya de nuestro sistema de nóminas y lo capturamos manual.
+
+253
+00:15:53,820 --> 00:15:58,560
+fluidar la fabricación de los documentos y las dalam nuestra propia información.
+
+254
+00:15:58,800 --> 00:16:00,920
+Scrollan que el trabajo幫 사물리 nog passed Ancora.
+
+255
+00:16:00,920 --> 00:16:03,540
+Podemos presionarlo, pegar el documento, y apretar el lado deliguously de formularlo делать el documento,
+
+256
+00:16:03,540 --> 00:16:07,860
+título de al foss slave, se hace así.
+
+257
+00:16:09,379 --> 00:16:13,260
+Consente caviar que esa información de nuestro sistema de nóminas es una solución para los registros de mansión,
+
+258
+00:16:13,260 --> 00:16:18,200
+lo cual standpointos en la cual la 당enteeste, por ejemplo en el sistema de nóminas porque no Tingappplay está en sería typo questão de formular el momento del gran permiso de la nominación.
+
+259
+00:16:18,200 --> 00:16:23,020
+Todo eso nos va a revelarle en la web de diario, o lo que estamos preguntando como alfabetización con los documentos.
+
+260
+00:16:23,020 --> 00:16:23,480
+Bien.
+
+261
+00:16:23,480 --> 00:16:24,620
+Muy probable que sí.
+
+262
+00:16:25,639 --> 00:16:27,920
+Ok, se lo mandarían después, ¿verdad?
+
+263
+00:16:28,320 --> 00:16:29,420
+Sí, está bien.
+
+264
+00:16:30,180 --> 00:16:30,480
+Ok.
+
+265
+00:16:30,480 --> 00:16:41,680
+Para registrar una póliza manual, le damos en este icono de más, elegimos el tipo de movimiento que vamos a hacer.
+
+266
+00:16:42,399 --> 00:16:45,500
+En este caso, las pólizas manuales son egresos varios.
+
+267
+00:16:46,779 --> 00:16:47,879
+Le damos a aceptar.
+
+268
+00:16:48,820 --> 00:16:50,139
+Seleccionamos la fecha.
+
+269
+00:16:50,139 --> 00:16:56,519
+El monto que va a salir de nuestro banco para que coincida con nuestro estado de cuenta.
+
+270
+00:16:58,559 --> 00:17:02,500
+El tipo de egreso, que va a ser una, pues, transferencia.
+
+271
+00:17:03,860 --> 00:17:08,240
+La clase de movimientos, si estamos registrando un pago de nómina.
+
+272
+00:17:09,619 --> 00:17:12,859
+Sería nómina, tenemos muchos tipos, muchas clases.
+
+273
+00:17:13,500 --> 00:17:16,139
+Finitos, honorarios, pago de impuestos.
+
+274
+00:17:18,139 --> 00:17:19,139
+Ok, el concepto.
+
+275
+00:17:20,140 --> 00:17:21,140
+Ok.
+
+276
+00:17:28,560 --> 00:17:33,140
+Le damos guardar para que podamos habilitar la parte de abajo.
+
+277
+00:17:34,480 --> 00:17:40,400
+Y agregamos nuestros movimientos contables, dependiendo de las cuentas que ocupemos.
+
+278
+00:17:42,000 --> 00:17:42,140
+Sueldos.
+
+279
+00:17:44,400 --> 00:17:46,160
+La cantidad que ocupemos.
+
+280
+00:17:48,560 --> 00:17:49,160
+Ok.
+
+281
+00:17:50,140 --> 00:17:52,040
+Nuevamente.
+
+282
+00:18:10,560 --> 00:18:13,759
+Aquí se agregan nuevos movimientos.
+
+283
+00:18:13,759 --> 00:18:19,259
+Y, pues, contra lo que estemos, el banco que estemos utilizando.
+
+284
+00:18:20,140 --> 00:18:21,440
+YItem.
+
+285
+00:18:21,440 --> 00:18:25,180
+Es un grupo del eBay.
+
+286
+00:18:25,180 --> 00:18:27,720
+Seeffo Namaskar.
+
+287
+00:18:27,720 --> 00:18:29,280
+Este es un grupo por las que se trata.
+
+288
+00:18:29,280 --> 00:18:31,560
+El banco es muy importante.
+
+289
+00:18:31,560 --> 00:18:32,820
+Vamos a girar una vez la lista.
+
+290
+00:18:32,820 --> 00:18:35,540
+Que no es el mismo número que el box y más el al been.
+
+291
+00:18:35,540 --> 00:18:36,180
+Óypedes de mutuos al vaso.
+
+292
+00:18:36,360 --> 00:18:38,140
+Sí, el banco está disponible.
+
+293
+00:18:38,520 --> 00:18:42,720
+akb se ciertamente eres parentheses bastante candidato para las solicitudes.
+
+294
+00:18:46,660 --> 00:18:49,980
+зас cómo que me Fukuma Bay la mano del tiempo abierta
+
+295
+00:18:50,140 --> 00:18:52,640
+Le damos conciliado y guardar.
+
+296
+00:19:00,180 --> 00:19:01,300
+Ok.
+
+297
+00:19:02,680 --> 00:19:08,920
+También tenemos otros movimientos como son los traspasos entre cuentas.
+
+298
+00:19:10,800 --> 00:19:17,940
+Esos regularmente son traspasar los saldos entre nuestras diferentes cuentas bancarias.
+
+299
+00:19:17,940 --> 00:19:22,039
+Eso solamente se hace con F8.
+
+300
+00:19:24,600 --> 00:19:25,779
+¿No funciona?
+
+301
+00:19:26,820 --> 00:19:27,420
+Funciona.
+
+302
+00:19:27,700 --> 00:19:28,580
+Funciona F8.
+
+303
+00:19:29,779 --> 00:19:30,640
+Ahí está.
+
+304
+00:19:32,380 --> 00:19:41,120
+Ponemos la cantidad que vamos a traspasar entre nuestros bancos, la fecha, el banco al que se va a ir este dinero.
+
+305
+00:19:43,759 --> 00:19:44,600
+Aceptar.
+
+306
+00:19:45,279 --> 00:19:45,960
+Continuar.
+
+307
+00:19:45,960 --> 00:19:47,920
+Nos pide confirmación.
+
+308
+00:19:47,940 --> 00:19:54,880
+Continuar fecha, el tipo de egreso, el movimiento que sería entre cuentas propias.
+
+309
+00:19:57,880 --> 00:20:00,299
+Lo que se hace.
+
+310
+00:20:00,299 --> 00:20:00,799
+Ok.
+
+311
+00:20:12,000 --> 00:20:15,380
+También tenemos otro movimiento que es manual.
+
+312
+00:20:15,960 --> 00:20:16,100
+Claro.
+
+313
+00:20:16,559 --> 00:20:17,920
+Son las comisiones bancarias.
+
+314
+00:20:17,940 --> 00:20:19,940
+Las que nos cobran por cada transferencia.
+
+315
+00:20:21,120 --> 00:20:22,960
+Por ejemplo, el día 10.
+
+316
+00:20:23,840 --> 00:20:25,620
+Perdón, te me cortaste el último.
+
+317
+00:20:25,820 --> 00:20:26,160
+¿Cuáles son?
+
+318
+00:20:27,360 --> 00:20:27,940
+Ah, los...
+
+319
+00:20:29,420 --> 00:20:34,140
+Las comisiones bancarias que nos cobra el banco por cada transferencia.
+
+320
+00:20:37,160 --> 00:20:38,940
+Por ejemplo...
+
+321
+00:20:40,039 --> 00:20:41,980
+Del día 10.
+
+322
+00:20:42,340 --> 00:20:46,759
+De todos nuestros pagos que hicimos el día 10, aparecen comisiones más su IVA.
+
+323
+00:20:46,759 --> 00:20:46,880
+Ok.
+
+324
+00:20:46,880 --> 00:20:55,100
+Lo que hacemos es tomar las comisiones del día, su IVA y tenemos esta cantidad.
+
+325
+00:20:55,100 --> 00:21:03,580
+Como el banco emite comisiones, la factura de comisiones a inicios del siguiente mes, lo que hacemos aquí es registrarlas diariamente.
+
+326
+00:21:04,720 --> 00:21:08,960
+Creamos una factura en el módulo de compras.
+
+327
+00:21:12,960 --> 00:21:15,620
+En el módulo de compras en recepciones.
+
+328
+00:21:16,880 --> 00:21:17,880
+Mis Gustos Sociales y Com ray 2.
+
+329
+00:21:17,900 --> 00:21:18,500
+Este módulo de nämbran lo hacemos en abril.
+
+330
+00:21:19,480 --> 00:21:19,920
+Para hacer una пропalla en el día 10, utilizamos un programa de compras.
+
+331
+00:21:19,920 --> 00:21:25,220
+Hoy vamos a hacer este proceso cuando se tres comisiones del día 10 que la página central para si queremos combatir a los consumidores del día 10,
+
+332
+00:21:25,260 --> 00:21:27,360
+pero ahora ya tenemos un verاضito neste.
+
+333
+00:21:27,700 --> 00:21:28,640
+Y el comisionemos...
+
+334
+00:21:29,060 --> 00:21:34,100
+Vamos a dejar el número extra para que se vuelva el número��고,
+
+335
+00:21:34,360 --> 00:21:36,940
+pero lo veáis, que el mensual, las comisiones y el pago son aboutos estos días.
+
+336
+00:21:36,940 --> 00:21:39,120
+Tenemos cuatro.
+
+337
+00:21:40,480 --> 00:21:41,940
+Con este módulo de compra...
+
+338
+00:21:41,940 --> 00:21:43,340
+Ya pouesta cuatro comisiones diarias.
+
+339
+00:21:43,340 --> 00:21:44,060
+Gracias.
+
+340
+00:21:44,060 --> 00:21:44,800
+Y ahora, ¿ parliamentary?
+
+341
+00:21:44,800 --> 00:21:45,840
+Vamos a hacer una comp لي de compra con información el día 10.
+
+342
+00:21:45,839 --> 00:21:52,139
+Asignamos estos campos especialmente y solo para comisiones bancarias.
+
+343
+00:22:06,539 --> 00:22:12,459
+Le damos guardar y agregamos...
+
+344
+00:22:15,839 --> 00:22:19,839
+Tenemos un producto que se llama comisión terminal.
+
+345
+00:22:23,299 --> 00:22:29,799
+En este caso, después de calcular las comisiones del día, que tenemos en nuestro Excel,
+
+346
+00:22:33,679 --> 00:22:40,079
+serían 78, ponemos la tasa de IVA.
+
+347
+00:22:41,220 --> 00:22:45,799
+Esto es igual que la captura de facturas y de remisiones.
+
+348
+00:22:45,839 --> 00:22:49,159
+Y aquí nos da el total. Le damos guardar.
+
+349
+00:22:51,220 --> 00:22:51,740
+Cerrar.
+
+350
+00:22:52,559 --> 00:22:55,079
+Y le damos...
+
+351
+00:22:55,079 --> 00:22:59,659
+Este folio ya existe, por eso no lo deja guardar.
+
+352
+00:23:03,539 --> 00:23:04,939
+Ahora sí ya la guardo.
+
+353
+00:23:09,720 --> 00:23:11,279
+Nos vamos a pagos.
+
+354
+00:23:11,279 --> 00:23:14,279
+Y aquí la estamos...
+
+355
+00:23:15,339 --> 00:23:15,480
+Procurando.
+
+356
+00:23:15,839 --> 00:23:16,980
+Programando manualmente.
+
+357
+00:23:17,519 --> 00:23:19,799
+Le damos control F8.
+
+358
+00:23:23,220 --> 00:23:25,079
+Y nos vamos a nuestro banco.
+
+359
+00:23:25,819 --> 00:23:27,279
+Creamos una nueva póliza.
+
+360
+00:23:28,480 --> 00:23:31,559
+Este tipo de movimiento va a ser egresos, compra, transferencia,
+
+361
+00:23:31,659 --> 00:23:36,720
+porque son todos los movimientos manuales que tienen una factura desde el módulo de compras.
+
+362
+00:23:38,559 --> 00:23:39,240
+Aceptar.
+
+363
+00:23:43,279 --> 00:23:44,899
+Buscamos nuestro proveedor.
+
+364
+00:23:45,839 --> 00:23:51,240
+Son comisiones bancarias.
+
+365
+00:23:55,819 --> 00:23:57,759
+Tipo de movimiento.
+
+366
+00:23:58,639 --> 00:24:01,519
+Clase de movimiento. Son comisiones bancarias.
+
+367
+00:24:02,279 --> 00:24:03,259
+Le damos guardar.
+
+368
+00:24:04,339 --> 00:24:10,480
+Y buscamos nuestra factura programada, que sería esta.
+
+369
+00:24:11,859 --> 00:24:13,459
+Le damos conciliado y afectar.
+
+370
+00:24:15,839 --> 00:24:24,659
+Y con eso ese movimiento bancario ya nos aparece en bancos, en nuestros egresos.
+
+371
+00:24:24,659 --> 00:24:40,459
+Y el registro de impuestos.
+
+372
+00:24:40,459 --> 00:24:40,500
+Y el registro de impuestos.
+
+373
+00:24:42,799 --> 00:24:45,359
+Una vez que tenemos el pago en nuestro banco.
+
+374
+00:24:45,839 --> 00:24:54,799
+hacemos manual también nuestros
+
+375
+00:24:54,799 --> 00:24:58,279
+nuestras pólizas de pago de impuestos
+
+376
+00:24:58,279 --> 00:25:00,519
+este es el del 3% sobre nómina
+
+377
+00:25:00,519 --> 00:25:04,879
+este es muy sencillo
+
+378
+00:25:08,299 --> 00:25:10,679
+el tipo de movimiento es
+
+379
+00:25:10,679 --> 00:25:11,720
+egresos varios
+
+380
+00:25:11,720 --> 00:25:16,200
+configuramos monto, fecha
+
+381
+00:25:16,200 --> 00:25:20,660
+concepto pago de impuestos
+
+382
+00:25:20,660 --> 00:25:23,660
+se le da la opción de guardar
+
+383
+00:25:23,660 --> 00:25:26,100
+para poder habilitar la parte de abajo
+
+384
+00:25:26,100 --> 00:25:29,279
+y poder empezar a capturar las cuentas correspondientes
+
+385
+00:25:41,720 --> 00:25:44,160
+tenemos diferentes contribuciones que se pagan
+
+386
+00:25:44,160 --> 00:25:48,160
+entonces cada contribución tiene su cuenta contable
+
+387
+00:26:03,160 --> 00:26:06,200
+igual las contribuciones de seguridad social y de infonavi
+
+388
+00:26:06,200 --> 00:26:10,200
+de esas ocupamos el...
+
+389
+00:26:10,200 --> 00:26:11,420
+...
+
+390
+00:26:11,720 --> 00:26:14,660
+el resumen de liquidación para empezar a clasificar
+
+391
+00:26:14,660 --> 00:26:19,339
+¿de esto ocupan más detalle?
+
+392
+00:26:19,539 --> 00:26:20,819
+¿hacer algún ejemplo?
+
+393
+00:26:22,500 --> 00:26:24,900
+bueno creo que de momento está bien así
+
+394
+00:26:24,900 --> 00:26:27,519
+como que identificarla cuando entramos
+
+395
+00:26:27,519 --> 00:26:29,259
+por más detalle estamos haciendo
+
+396
+00:26:29,259 --> 00:26:30,460
+como tal
+
+397
+00:26:30,460 --> 00:26:33,259
+la gente que está haciendo a lo mejor
+
+398
+00:26:33,259 --> 00:26:34,579
+estarán teniendo como ejemplos
+
+399
+00:26:34,579 --> 00:26:36,360
+o si cambia algo verdad
+
+400
+00:26:36,360 --> 00:26:38,500
+pero veo que un poco el llenado es muy
+
+401
+00:26:38,500 --> 00:26:41,660
+generalizado en cuestionar lo que tiene que estar llenando
+
+402
+00:26:41,660 --> 00:26:41,700
+y también
+
+403
+00:26:41,720 --> 00:26:44,779
+si tiene que tomar por la información de acá ¿verdad?
+
+404
+00:26:44,779 --> 00:26:50,059
+ok eso sería la parte... los ingresos
+
+405
+00:26:50,059 --> 00:26:53,059
+ok
+
+406
+00:26:53,059 --> 00:26:58,480
+para la captura de ingresos
+
+407
+00:26:58,480 --> 00:27:06,000
+bueno la cuenta de tarjetas de crédito es exactamente lo mismo
+
+408
+00:27:06,000 --> 00:27:09,600
+hay facturas que se programan para aplicar el pago
+
+409
+00:27:09,600 --> 00:27:11,500
+bueno
+
+410
+00:27:11,720 --> 00:27:15,720
+todos los abonos de nuestra tarjeta de débito son los pagos que se...
+
+411
+00:27:15,720 --> 00:27:19,460
+los traspasos que se hacen en nuestra cuenta principal
+
+412
+00:27:19,460 --> 00:27:24,900
+y para empezar con ingresos ocupamos la cuenta de tarjetas
+
+413
+00:27:24,900 --> 00:27:29,400
+donde todas nuestras ventas con tarjetas de débito de crédito
+
+414
+00:27:29,400 --> 00:27:33,480
+lo que hacemos primero es
+
+415
+00:27:33,480 --> 00:27:39,960
+organizar nuestro reporte de ventas
+
+416
+00:27:39,960 --> 00:27:41,059
+¿no?
+
+417
+00:27:41,059 --> 00:27:46,960
+este reporte nos lo comparten el departamento de tesorería
+
+418
+00:27:46,960 --> 00:27:49,879
+que es este
+
+419
+00:27:49,879 --> 00:27:55,480
+ok
+
+420
+00:27:55,480 --> 00:27:58,200
+este reporte ellas se encargan de llenarlo
+
+421
+00:27:58,200 --> 00:28:01,399
+está compuesto de lo que es nuestra factura global
+
+422
+00:28:01,399 --> 00:28:03,960
+nuestras facturas individuales
+
+423
+00:28:03,960 --> 00:28:06,559
+y las cantidades que entraron con tarjeta
+
+424
+00:28:11,059 --> 00:28:16,539
+este está completo ¿verdad?
+
+425
+00:28:16,599 --> 00:28:17,139
+el día 4
+
+426
+00:28:17,139 --> 00:28:18,559
+para tomarlo de ejemplo
+
+427
+00:28:18,559 --> 00:28:19,379
+¿ok?
+
+428
+00:28:19,379 --> 00:28:20,299
+ok
+
+429
+00:28:20,299 --> 00:28:21,639
+por ejemplo nos vamos al día 4
+
+430
+00:28:21,639 --> 00:28:24,740
+los depósitos del día 4 corresponden
+
+431
+00:28:24,740 --> 00:28:27,679
+a nuestras ventas del día anterior
+
+432
+00:28:27,679 --> 00:28:31,399
+en el banco se reflejan un día después
+
+433
+00:28:31,399 --> 00:28:35,539
+este reporte nos indica que con tarjetas subimos ventas
+
+434
+00:28:35,539 --> 00:28:38,000
+de 251 mil pesos
+
+435
+00:28:38,000 --> 00:28:40,859
+y éstas se ven reflejadas
+
+436
+00:28:40,859 --> 00:28:40,980
+en el día 4
+
+437
+00:28:41,059 --> 00:28:46,139
+entre 4 a 5 movimientos bancarios.
+
+438
+00:28:52,179 --> 00:28:56,019
+Nosotros los clasificamos por color para identificar las ventas del día.
+
+439
+00:28:59,700 --> 00:29:04,000
+Estos 4 movimientos corresponden a las ventas con tarjetas de ese día.
+
+440
+00:29:05,279 --> 00:29:09,659
+Una vez identificados, procedemos a capturarlos manualmente.
+
+441
+00:29:11,059 --> 00:29:13,119
+En nuestro módulo de bancos,
+
+442
+00:29:17,000 --> 00:29:28,179
+tenemos la opción de ingresos, venta diaria, aceptar, seleccionamos la fecha,
+
+443
+00:29:30,579 --> 00:29:36,919
+clase de movimiento que da venta diaria, concepto de venta diaria del día que vamos a capturar.
+
+444
+00:29:41,059 --> 00:29:42,399
+El 13.
+
+445
+00:29:49,960 --> 00:29:56,460
+La forma de pago en nuestro estado de cuenta se especifica qué tipo de tarjeta fue.
+
+446
+00:29:57,019 --> 00:29:59,019
+Aquí dice que es tarjeta de crédito.
+
+447
+00:30:00,559 --> 00:30:02,539
+La siguiente dice que es tarjeta de débito.
+
+448
+00:30:02,659 --> 00:30:05,159
+Entonces, tarjeta de crédito.
+
+449
+00:30:08,000 --> 00:30:08,940
+Aquí está.
+
+450
+00:30:10,000 --> 00:30:11,000
+Le damos a la opción de ingresos.
+
+451
+00:30:11,000 --> 00:30:13,160
+Le damos a guardar para que se habilite la parte de abajo.
+
+452
+00:30:14,539 --> 00:30:15,819
+Y le damos más.
+
+453
+00:30:15,940 --> 00:30:19,559
+En automático nos pide facturas serie FD.
+
+454
+00:30:21,039 --> 00:30:22,740
+Este número de factura.
+
+455
+00:30:29,160 --> 00:30:30,180
+Está en el drive.
+
+456
+00:30:34,900 --> 00:30:35,900
+Sí, se está, ¿verdad?
+
+457
+00:30:36,000 --> 00:30:37,819
+Desde la global.
+
+458
+00:30:37,819 --> 00:30:37,900
+Desde la global.
+
+459
+00:30:37,900 --> 00:30:42,040
+Esta factura va a corresponder.
+
+460
+00:30:45,259 --> 00:30:46,480
+No lo han llenado.
+
+461
+00:30:50,280 --> 00:30:52,040
+A nuestra factura global.
+
+462
+00:30:52,220 --> 00:31:01,140
+La factura global se separa o está compartida por nuestras ventas con tarjeta y nuestras ventas en efectivo.
+
+463
+00:31:02,160 --> 00:31:03,600
+Facturadas al público en general.
+
+464
+00:31:03,600 --> 00:31:07,880
+Entonces, teniendo este reporte, sabemos que estas ventas.
+
+465
+00:31:08,040 --> 00:31:30,640
+Estas betas, lo
+
+466
+00:31:30,640 --> 00:31:32,180
+ここ los que son las variable de uso y los efectos tarjetas corresponden en la factura diecinueve cero noventa y uno.
+
+467
+00:31:32,180 --> 00:31:34,260
+El ingreso lo tomamos de nuestro estado de cuenta.
+
+468
+00:31:34,440 --> 00:31:36,120
+El alterar su respuesta a ese comportamiento.
+
+469
+00:31:36,120 --> 00:31:37,120
+alla avance.
+
+470
+00:31:37,240 --> 00:31:37,720
+Rossi.
+
+471
+00:31:37,720 --> 00:31:47,720
+Y en automático de nuestro monto de la factura global está restando lo que vamos a aplicar y queda un saldo pendiente.
+
+472
+00:31:50,160 --> 00:31:55,640
+Suponiendo que este es el importe correcto del día correcto, le damos conciliado, guardar.
+
+473
+00:31:56,839 --> 00:32:03,299
+Y para todas las facturas de ventas, todos los registros de pólizas de ventas, nos vamos a la opción de pólizas.
+
+474
+00:32:03,299 --> 00:32:12,559
+Damos clic derecho y regenerar póliza contable para que nos pueda generar nuestra póliza en contabilidad.
+
+475
+00:32:13,099 --> 00:32:18,299
+Esto no lo hace en automático como los demás módulos. Tenemos que seleccionarlo.
+
+476
+00:32:23,720 --> 00:32:29,619
+De nuestro estado de cuenta de tarjetas, todos estos movimientos se registran uno por uno.
+
+477
+00:32:33,299 --> 00:32:39,759
+Este es el de tarjetas. Igual, tenemos comisiones bancarias por el uso de terminales.
+
+478
+00:32:40,460 --> 00:32:43,599
+Estas comisiones bancarias se clasifican por día.
+
+479
+00:32:45,839 --> 00:32:51,460
+Y se registran en el módulo de compras, nuestra factura por comisiones.
+
+480
+00:32:52,919 --> 00:32:58,119
+Y se aplican como las del otro banco de la cuenta 17.
+
+481
+00:32:58,879 --> 00:32:59,519
+Ok.
+
+482
+00:33:03,299 --> 00:33:08,879
+Continuando con nuestra venta global, ya checamos lo que entró en tarjetas.
+
+483
+00:33:08,879 --> 00:33:12,500
+Ahora revisamos lo que entró en efectivo.
+
+484
+00:33:13,159 --> 00:33:21,000
+Estos movimientos se depositan al día siguiente, a más tardar dos días después.
+
+485
+00:33:22,460 --> 00:33:24,599
+Y se encuentran como depósitos en efectivo.
+
+486
+00:33:26,559 --> 00:33:30,639
+Por ejemplo, este depósito en efectivo corresponde a la venta del día 5.
+
+487
+00:33:33,299 --> 00:33:41,180
+Todo esto tiene que coincidir con nuestro drive, donde se están reportando los ingresos.
+
+488
+00:33:43,159 --> 00:33:44,960
+Es el que hace tesorería, ¿verdad?
+
+489
+00:33:45,480 --> 00:33:48,259
+Sí. Esto lo llena el departamento de tesorería.
+
+490
+00:33:49,039 --> 00:33:50,680
+Los cortes, los depósitos.
+
+491
+00:33:51,799 --> 00:33:57,759
+Ellas dicen que enviaron 304 mil pesos y son lo que se reflejó en nuestro banco.
+
+492
+00:33:58,899 --> 00:34:01,639
+Aquí se reflejó hasta el día 7. Hay diferencia de días.
+
+493
+00:34:03,299 --> 00:34:05,619
+Ok. Este movimiento.
+
+494
+00:34:11,320 --> 00:34:20,159
+Lo registramos de igual manera en bancos.
+
+495
+00:34:22,440 --> 00:34:24,119
+Ingreso, venta diaria.
+
+496
+00:34:24,559 --> 00:34:28,460
+Todas las ventas que tienen factura son en ingresos, venta diaria.
+
+497
+00:34:28,460 --> 00:34:29,460
+Ok.
+
+498
+00:34:31,159 --> 00:34:31,440
+Ok.
+
+499
+00:34:31,440 --> 00:34:37,639
+Ok. Seleccionamos la fecha, el concepto correcto.
+
+500
+00:34:37,780 --> 00:34:42,659
+En automático, una vez lleno con las facturas, se pone el monto del ingreso.
+
+501
+00:34:44,039 --> 00:34:47,300
+Este tipo de venta es en efectivo porque son depósitos.
+
+502
+00:34:49,659 --> 00:34:52,119
+Guardamos y habilitamos esta parte.
+
+503
+00:34:54,119 --> 00:34:56,599
+Y de acuerdo con nuestro drive, empezamos a capturar.
+
+504
+00:34:56,599 --> 00:34:57,260
+Ok.
+
+505
+00:34:57,260 --> 00:34:57,460
+Ok.
+
+506
+00:34:59,460 --> 00:34:59,599
+Ok.
+
+507
+00:34:59,599 --> 00:34:59,700
+Ok.
+
+508
+00:34:59,700 --> 00:34:59,780
+Ok.
+
+509
+00:34:59,780 --> 00:34:59,840
+Ok.
+
+510
+00:34:59,840 --> 00:34:59,900
+Ok.
+
+511
+00:34:59,900 --> 00:34:59,920
+Ok.
+
+512
+00:34:59,920 --> 00:35:00,019
+Ok.
+
+513
+00:35:00,019 --> 00:35:00,139
+Ok.
+
+514
+00:35:00,139 --> 00:35:00,159
+Ok.
+
+515
+00:35:00,159 --> 00:35:00,220
+Ok.
+
+516
+00:35:00,220 --> 00:35:00,260
+Ok.
+
+517
+00:35:00,260 --> 00:35:00,320
+Ok.
+
+518
+00:35:00,320 --> 00:35:00,340
+Ok.
+
+519
+00:35:00,340 --> 00:35:00,380
+Ok.
+
+520
+00:35:00,380 --> 00:35:00,940
+Ok.
+
+521
+00:35:00,940 --> 00:35:01,420
+Ok.
+
+522
+00:35:01,440 --> 00:35:01,619
+Ok.
+
+523
+00:35:01,619 --> 00:35:01,659
+Ok.
+
+524
+00:35:01,659 --> 00:35:01,679
+Ok.
+
+525
+00:35:01,700 --> 00:35:01,740
+Ok.
+
+526
+00:35:02,480 --> 00:35:02,639
+Así que empezamos.
+
+527
+00:35:02,639 --> 00:35:03,880
+Speed.
+
+528
+00:35:08,440 --> 00:35:11,559
+Ok.
+
+529
+00:35:25,559 --> 00:35:25,679
+Ok.
+
+530
+00:35:25,980 --> 00:35:27,619
+Ok.
+
+531
+00:35:27,980 --> 00:35:29,700
+Ok.
+
+532
+00:35:29,699 --> 00:35:32,859
+se pone el folio,
+
+533
+00:35:36,699 --> 00:35:39,939
+el tipo de factura cambia, es individual,
+
+534
+00:35:41,139 --> 00:35:43,879
+y se pone el importe de la factura.
+
+535
+00:35:44,579 --> 00:35:48,319
+En este caso, como este folio ya está usado, va a salir un saldo negativo,
+
+536
+00:35:48,639 --> 00:35:50,319
+porque ya se capturó completamente.
+
+537
+00:35:51,859 --> 00:35:53,939
+Lo mismo hacemos con todas las demás.
+
+538
+00:35:53,940 --> 00:36:00,760
+Entonces, todas estas se van agregando en esa misma póliza, una por una,
+
+539
+00:36:01,000 --> 00:36:06,000
+y finalmente se agrega la global con este remanente que debe de quedar.
+
+540
+00:36:12,059 --> 00:36:13,280
+De igual manera,
+
+541
+00:36:15,860 --> 00:36:20,059
+todas estas corresponden al mismo folio,
+
+542
+00:36:20,940 --> 00:36:23,099
+suponiendo que tiene este saldo,
+
+543
+00:36:23,940 --> 00:36:26,360
+aquí ya me acabé el saldo,
+
+544
+00:36:32,720 --> 00:36:39,119
+lo mismo es el proceso conciliado, guardar póliza y regenerar póliza contable.
+
+545
+00:36:51,000 --> 00:36:53,920
+Estos son los ejemplos de las ventas que hacemos.
+
+546
+00:36:53,940 --> 00:36:54,260
+Estos son los ejemplos de las ventas que hacemos,
+
+547
+00:36:55,000 --> 00:36:55,940
+que capturamos,
+
+548
+00:36:56,720 --> 00:36:58,940
+están compuestas por las individuales,
+
+549
+00:37:00,200 --> 00:37:01,500
+y al final, la global.
+
+550
+00:37:05,820 --> 00:37:08,159
+Está conciliada, guardada,
+
+551
+00:37:08,920 --> 00:37:10,940
+y tiene su póliza regenerada.
+
+552
+00:37:13,240 --> 00:37:14,940
+Y así es como queda.
+
+553
+00:37:24,340 --> 00:37:35,500
+Y así empezamos la Italia la nueva guerra terminal y el que破rica el עľejo,
+
+554
+00:37:35,500 --> 00:37:38,200
+que se está haciendo exactamente para la existencia decurstein,
+
+555
+00:37:38,200 --> 00:37:39,099
+el 했습니다 pólizar,
+
+556
+00:37:39,099 --> 00:37:42,119
+para particulares que están quebrantando el puesto de gallando.
+
+557
+00:37:42,119 --> 00:37:45,700
+El fondo de cont Gallo comunicadas y que los pet loosen,
+
+558
+00:37:45,700 --> 00:37:47,280
+cambios más guardados.
+
+559
+00:37:47,280 --> 00:37:53,720
+Allí cuentan más las intereses al campo del control a la oportunidad,
+
+560
+00:37:53,940 --> 00:38:04,280
+Y aquí solo se registra una vez la global.
+
+561
+00:38:10,720 --> 00:38:13,700
+No tenemos otros ingresos más que ventas.
+
+562
+00:38:14,639 --> 00:38:19,700
+Rara vez algún ingreso por devoluciones de IVA.
+
+563
+00:38:19,699 --> 00:38:29,460
+O facturas de clientes específicos.
+
+564
+00:38:29,460 --> 00:38:38,639
+Por ejemplo, aquí nos están pagando un cliente una factura.
+
+565
+00:38:40,739 --> 00:38:47,159
+Tenemos dos módulos donde tenemos facturas, el módulo de ventas y el módulo de comercial.
+
+566
+00:38:47,159 --> 00:38:49,319
+En nuestro módulo de comercial.
+
+567
+00:38:49,699 --> 00:38:54,819
+Es donde se hacen las facturas para clientes específicos.
+
+568
+00:38:54,819 --> 00:39:08,159
+Eso es para clientes específicos.
+
+569
+00:39:08,159 --> 00:39:12,159
+Sí, para los que requieran factura con RPC específico.
+
+570
+00:39:12,159 --> 00:39:16,539
+Aquí está.
+
+571
+00:39:19,699 --> 00:39:21,699
+Ok.
+
+572
+00:39:21,699 --> 00:39:33,000
+Como estos clientes tienen su factura referida, nos vamos al módulo de comercial, cobranza.
+
+573
+00:39:33,000 --> 00:39:43,699
+Crear cobro múltiple y nos da listado de nuestros clientes que piden factura.
+
+574
+00:39:43,699 --> 00:39:45,699
+Ok.
+
+575
+00:39:45,699 --> 00:39:47,699
+Y aquí tenemos el módulo de ventas.
+
+576
+00:39:47,699 --> 00:39:49,699
+Aquí tenemos el módulo de ventas.
+
+577
+00:39:49,699 --> 00:39:50,699
+Ok.
+
+578
+00:39:50,699 --> 00:39:51,699
+Por lo regular no son muchos.
+
+579
+00:39:51,699 --> 00:39:59,699
+Las facturas que están timbradas son las que tienen serie FC.
+
+580
+00:39:59,699 --> 00:40:04,699
+Solamente las demás son remisiones o de saldos anteriores.
+
+581
+00:40:04,699 --> 00:40:13,699
+Al momento no tenemos alguna venta pendiente de afectar.
+
+582
+00:40:13,699 --> 00:40:14,699
+Ok.
+
+583
+00:40:14,699 --> 00:40:17,699
+No tenemos ninguna venta pendiente de afectar.
+
+584
+00:40:17,699 --> 00:40:18,699
+Ok.
+
+585
+00:40:19,699 --> 00:40:21,699
+No tenemos ninguna venta pendiente de afectar.
+
+586
+00:40:21,699 --> 00:40:22,699
+Ok.
+
+587
+00:40:22,699 --> 00:40:30,699
+Suponiendo que esta factura ya aparezca, ya aparezca el ingreso en nuestro estado de cuenta,
+
+588
+00:40:30,699 --> 00:40:31,699
+lo único que se hace es seleccionar.
+
+589
+00:40:31,699 --> 00:40:34,699
+Aparece en la parte de abajo.
+
+590
+00:40:34,699 --> 00:40:35,699
+Le damos en procesar.
+
+591
+00:40:35,699 --> 00:40:41,699
+Nos dice la fecha del cobro de acuerdo a nuestro estado de cuenta, la forma de pago, transferencia.
+
+592
+00:40:41,699 --> 00:40:46,699
+Al banco que se va a dirigir, al régio.
+
+593
+00:40:46,699 --> 00:40:47,699
+Y a nuestra cuenta de acuerdo con nuestro estado de cuenta.
+
+594
+00:40:47,699 --> 00:40:53,019
+cuenta de acuerdo con nuestro estado y es lo único que se hace se le da afectar
+
+595
+00:41:17,699 --> 00:41:29,279
+y aparece en automático nuestro módulo de bancos nuestros ingresos en la fecha que las señalamos
+
+596
+00:41:34,879 --> 00:41:38,079
+y lo único que se hace es conciliado y guardar
+
+597
+00:41:47,699 --> 00:42:02,579
+este es un traspaso entre nuestras propias cuentas es un depósito de nuestras ventas
+
+598
+00:42:09,059 --> 00:42:12,439
+esto es una evolución de IVA
+
+599
+00:42:12,439 --> 00:42:17,239
+pago de un cliente
+
+600
+00:42:17,239 --> 00:42:17,679
+y esto es un traspaso entre nuestras propias cuentas
+
+601
+00:42:17,699 --> 00:42:21,319
+esto lo encontramos en el módulo de comerciar
+
+602
+00:42:21,319 --> 00:42:30,179
+y otra vez nuestro movimiento por depósito de ventas
+
+603
+00:42:30,179 --> 00:42:37,460
+rara vez se ocupa un registro manual en el módulo de bancos
+
+604
+00:42:37,460 --> 00:42:41,239
+como es el caso de esta devolución
+
+605
+00:42:41,239 --> 00:42:46,539
+lo único que tendríamos que hacer es estar en nuestra cuenta correcta
+
+606
+00:42:46,539 --> 00:42:47,679
+darle el nombre a la cuenta correcta
+
+607
+00:42:47,679 --> 00:42:47,699
+y darle el nombre a la cuenta correcta
+
+608
+00:42:47,699 --> 00:42:48,179
+y darle el nombre a la cuenta correcta
+
+609
+00:42:48,179 --> 00:42:48,559
+y la opción de más
+
+610
+00:42:48,559 --> 00:42:51,679
+y utilizamos ingresos varios
+
+611
+00:42:51,679 --> 00:42:57,099
+seleccionamos la fecha
+
+612
+00:42:57,099 --> 00:43:00,219
+del 11
+
+613
+00:43:00,219 --> 00:43:01,519
+del 12
+
+614
+00:43:01,519 --> 00:43:06,159
+había dos proveedores ahí
+
+615
+00:43:06,159 --> 00:43:10,359
+cada proveedor le pone su código
+
+616
+00:43:10,359 --> 00:43:17,139
+616
+
+617
+00:43:17,139 --> 00:43:17,239
+616
+
+618
+00:43:17,239 --> 00:43:17,259
+616
+
+619
+00:43:17,259 --> 00:43:17,299
+616
+
+620
+00:43:17,299 --> 00:43:17,319
+616
+
+621
+00:43:17,319 --> 00:43:17,339
+616
+
+622
+00:43:17,339 --> 00:43:17,359
+616
+
+623
+00:43:17,359 --> 00:43:17,379
+616
+
+624
+00:43:17,379 --> 00:43:17,399
+616
+
+625
+00:43:17,399 --> 00:43:17,419
+616
+
+626
+00:43:17,419 --> 00:43:17,480
+616
+
+627
+00:43:17,480 --> 00:43:17,500
+616
+
+628
+00:43:17,500 --> 00:43:17,519
+616
+
+629
+00:43:17,519 --> 00:43:17,539
+616
+
+630
+00:43:17,539 --> 00:43:17,679
+616
+
+631
+00:43:17,699 --> 00:43:17,799
+616
+
+632
+00:43:17,799 --> 00:43:18,099
+616
+
+633
+00:43:18,099 --> 00:43:18,139
+618
+
+634
+00:43:18,139 --> 00:43:18,159
+616
+
+635
+00:43:18,159 --> 00:43:18,199
+618
+
+636
+00:43:18,199 --> 00:43:19,359
+619
+
+637
+00:43:19,359 --> 00:43:19,519
+620
+
+638
+00:43:19,519 --> 00:43:19,859
+630
+
+639
+00:43:19,859 --> 00:43:19,899
+621
+
+640
+00:43:19,899 --> 00:43:21,139
+622
+
+641
+00:43:21,139 --> 00:43:21,319
+63
+
+642
+00:43:21,319 --> 00:43:23,839
+623
+
+643
+00:43:23,839 --> 00:43:24,899
+624
+
+644
+00:43:25,439 --> 00:43:25,599
+633
+
+645
+00:43:25,599 --> 00:43:25,919
+636
+
+646
+00:43:25,919 --> 00:43:26,019
+637
+
+647
+00:43:26,019 --> 00:43:26,099
+637
+
+648
+00:43:26,099 --> 00:43:27,859
+638
+
+649
+00:43:27,859 --> 00:43:28,379
+642
+
+650
+00:43:28,379 --> 00:43:28,480
+641
+
+651
+00:43:28,480 --> 00:43:42,639
+644
+
+652
+00:43:42,639 --> 00:43:42,960
+646
+
+653
+00:43:42,960 --> 00:43:43,000
+649
+
+654
+00:43:43,000 --> 00:43:43,039
+649
+
+655
+00:43:43,039 --> 00:43:43,079
+710
+
+656
+00:43:43,079 --> 00:43:43,119
+710
+
+657
+00:43:43,119 --> 00:43:43,139
+711
+
+658
+00:43:43,139 --> 00:43:43,739
+711
+
+659
+00:43:43,739 --> 00:43:43,899
+712
+
+660
+00:43:43,899 --> 00:43:44,679
+712
+
+661
+00:43:44,679 --> 00:43:45,339
+719
+
+662
+00:43:45,339 --> 00:43:46,539
+723
+
+663
+00:43:46,539 --> 00:43:46,939
+725
+
+664
+00:43:46,939 --> 00:43:47,359
+727
+
+665
+00:43:47,359 --> 00:43:47,539
+6 detachlevel
+
+666
+00:43:47,539 --> 00:43:47,599
+4.6
+
+667
+00:43:47,599 --> 00:43:47,679
+648
+
+668
+00:43:47,679 --> 00:43:52,679
+La cuenta de nuestro banco.
+
+669
+00:44:00,179 --> 00:44:04,739
+Un nuevo movimiento.
+
+670
+00:44:04,739 --> 00:44:34,719
+Un nuevo movimiento.
+
+671
+00:44:34,739 --> 00:44:38,939
+En los cargos y los abonos, conciliado y guardado.
+
+672
+00:44:42,319 --> 00:44:44,679
+Y ya tenemos nuestro ingreso capturado.
+
+673
+00:44:50,219 --> 00:44:56,459
+Creo que hasta ahí son todos los movimientos que se hacen con el banco.
+
+674
+00:44:57,459 --> 00:44:58,419
+Vale, perfecto.
+
+675
+00:44:58,979 --> 00:45:03,159
+Sí, mira, en este caso estamos anotando y grabando todo esto.
+
+676
+00:45:03,159 --> 00:45:04,719
+Pero igual yo creo que va a ser necesario.
+
+677
+00:45:04,739 --> 00:45:11,879
+Vamos a hacer un listado de parte de todo lo que hacen de captura manual en esta parte de ingresos o egresos.
+
+678
+00:45:12,339 --> 00:45:14,159
+Para que no se nos pase ninguno.
+
+679
+00:45:14,899 --> 00:45:18,119
+Y tener como muy puntual que se hacen cada uno, ¿verdad?
+
+680
+00:45:18,579 --> 00:45:21,799
+Igual te digo, estamos grabando la reunión.
+
+681
+00:45:22,079 --> 00:45:25,119
+Pero pues, sí como tu expertise nos ha ido dando.
+
+682
+00:45:25,259 --> 00:45:26,919
+A lo mejor no viste alguno aquí.
+
+683
+00:45:27,619 --> 00:45:30,659
+Y pues falta mencionarlo y también tenerlo como consideración.
+
+684
+00:45:31,619 --> 00:45:31,879
+Ok.
+
+685
+00:45:31,879 --> 00:45:32,059
+Ok.
+
+686
+00:45:32,059 --> 00:45:34,440
+Ok, entonces.
+
+687
+00:45:35,579 --> 00:45:37,559
+Bueno, creo que en esta parte.
+
+688
+00:45:38,739 --> 00:45:43,639
+Si es demasiada información, me gustaría ver si lo podemos dejar de momento aquí.
+
+689
+00:45:43,880 --> 00:45:45,179
+Para poderlo digerir nosotros.
+
+690
+00:45:45,420 --> 00:45:49,940
+Estar a este, en este momento, analizándola bien y poder mapear esta parte.
+
+691
+00:45:50,639 --> 00:45:53,079
+Posteriormente a presentárselo e ir avanzando con las demoradas.
+
+692
+00:45:53,239 --> 00:45:54,099
+Porque pues sí, sí.
+
+693
+00:45:54,539 --> 00:45:56,079
+Si es bastante información que dije yo.
+
+694
+00:45:57,139 --> 00:45:58,099
+Ok, de acuerdo.
+
+695
+00:45:58,820 --> 00:45:59,639
+Ok, perfecto.
+
+696
+00:46:00,460 --> 00:46:01,860
+Entonces, bueno.
+
+697
+00:46:02,059 --> 00:46:05,059
+De nuestra parte, creo que de momento no tengo ninguna duda.
+
+698
+00:46:05,179 --> 00:46:06,820
+Este, bueno, te van a sorprender muchísimo.
+
+699
+00:46:06,920 --> 00:46:09,320
+Si vamos a estarles molestando en ese sentido.
+
+700
+00:46:09,420 --> 00:46:11,219
+Ya sea en el grupo o por correo.
+
+701
+00:46:11,860 --> 00:46:14,079
+Igual veo aquí listado requerimientos.
+
+702
+00:46:14,179 --> 00:46:16,940
+Va a ser pues este ejemplo de los Excel.
+
+703
+00:46:17,039 --> 00:46:18,500
+También como lo que hace Tesorería.
+
+704
+00:46:18,599 --> 00:46:20,420
+Y por los accesos a las plataformas, ¿verdad?
+
+705
+00:46:20,840 --> 00:46:21,940
+Como para estar viendo.
+
+706
+00:46:22,039 --> 00:46:28,059
+Y aparte, pues este listado que te mencionaba de todas estas ingresos o capturas que hacen manuales.
+
+707
+00:46:29,420 --> 00:46:30,320
+De acuerdo, sí está bien.
+
+708
+00:46:30,779 --> 00:46:31,279
+Perfecto.
+
+709
+00:46:31,380 --> 00:46:31,679
+Bueno.
+
+710
+00:46:32,059 --> 00:46:32,820
+Bueno, gracias por su tiempo.
+
+711
+00:46:33,820 --> 00:46:34,360
+Hasta luego.
+
+712
+00:46:34,840 --> 00:46:35,199
+Buen día.
+
+713
+00:46:35,659 --> 00:46:35,860
+Chao.
+
+714
+00:46:35,860 --> 00:46:36,860
+Chao.

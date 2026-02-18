@@ -1,0 +1,265 @@
+## 12. Proceso de Programacion de Pagos (ERP/SAP)
+
+**[24:12 - 26:01]**
+Este es el tema de las conciliaciones que hacen. De la programacion de pagos.
+
+Primero es una **programacion de pagos**. Entramos primero a programacion de pagos. Ahi es donde se seleccionan todas las facturas que se van a realizar el pago. Para que despues teniendo ya la programacion generes un **layout** y a partir de ahi empieza el proceso de pagos de facturas a proveedores.
+
+Antes de afectarlos en el banco, se inicia seleccionando las facturas que se van a pagar segun **fecha de vencimiento**.
+
+**[32:09 - 33:04]**
+Desde el modulo de **compras** ingresamos al apartado de **pagos** y ahi es donde se hace la programacion para pago. Filtramos solamente la **serie F** (que son las facturas). Ordenamos todo segun la fecha de pago. Nos vamos hasta las mas antiguas que ya deben de saldarse y vamos seleccionando con **F8**.
+
+### Rangos de credito:
+- Contado
+- 8 dias
+- 15 dias
+- 21 dias
+
+Depende del credito que tiene el proveedor, todos se manejan diferente. En el modulo aparece la **fecha de pago** y la columna de **vencimiento** (cuantos dias ya pasaron). Esto se asigna previamente desde el **catalogo de proveedores**.
+
+---
+
+## 13. Flujo Completo de Programacion de Pagos
+
+**[35:04 - 37:49]**
+
+### Paso 1: Modulo de Compras
+- Filtrar por serie de facturas (F)
+- Ordenar por rango de fechas/dias de vencimiento por proveedor
+- Seleccionar facturas a pagar con F8
+
+### Paso 2: Modulo de Bancos - Solicitud de Pago
+- Aparecen los pagos programados desde compras
+- Confirmar que si se van a pagar
+
+### Paso 3: Egresos
+- Filtrar por fecha
+- Aparecen las programadas y confirmadas
+- El saldo debe ser el mismo que en programacion de pago
+- Seleccionar las que se van a exportar para el archivo del banco
+
+### Paso 4: Generacion de Archivo
+- Se genera automaticamente un **TXT** para subir al banco
+- Se genera un **Excel** con la informacion de los pagos
+- Se confirman cantidades y totales
+
+### Paso 5: Afectar en el Sistema
+- Regresar al modulo de bancos
+- Afectar todas las facturas para generar **polizas contables**
+- Se marcan como afectados (poliza de egreso)
+
+---
+
+## 14. Conciliacion Bancaria
+
+**[38:44 - 39:13]**
+Empezamos a trabajar con el **estado de cuenta del banco**, lo descargamos desde la banca, lo pegamos en nuestro papel de trabajo (Excel), y confirmamos que todos estos movimientos esten en nuestro sistema.
+
+Empezamos con los egresos. Todos estos egresos tienen que estar en el modulo de bancos.
+
+### Cuentas activas: 3
+- **Cuenta 17**: Cuenta de cheques
+- Tarjeta de debito
+- Cuenta de tarjetas
+
+**[39:28 - 39:54]**
+Ejemplo: pagos del dia. En el estado de cuenta aparecen los pagos. Ingresamos, le damos **conciliado y afectar**. Con eso se aplica el pago.
+
+---
+
+## 15. Movimientos Manuales - Egresos
+
+**[39:54 - 40:05]**
+Todo lo que son **pagos a proveedores** se hacen por medio de la programacion. Hay pagos que se tienen que hacer **manuales** porque no tenemos una factura.
+
+### Tipos de egresos manuales:
+
+#### a) Pago de Nomina
+**[40:05 - 41:07]**
+- Se saca un reporte/lista de raya del sistema de nominas
+- Se captura manualmente
+- Se necesita ejemplo del PDF del sistema de nominas
+
+#### b) Egresos Varios (Polizas Manuales)
+**[41:07 - 43:04]**
+- Icono de "mas" > Tipo de movimiento: **Egresos varios**
+- Seleccionar: fecha, monto, tipo de egreso (transferencia), clase de movimiento
+- Clases disponibles: nomina, honorarios, pago de impuestos, etc.
+- Guardar para habilitar la parte de abajo
+- Agregar movimientos contables con las cuentas correspondientes
+- Todos los datos vienen del Excel
+
+#### c) Traspasos entre Cuentas
+**[43:34 - 44:14]**
+- Se hacen con **F8**
+- Poner cantidad a traspasar, fecha, banco destino
+- Aceptar, confirmar fecha, tipo de egreso, movimiento: entre cuentas propias
+
+#### d) Comisiones Bancarias
+**[44:45 - 48:51]**
+- Se clasifican por dia
+- Se toman las comisiones del dia + su IVA
+- Como el banco emite la factura a inicios del siguiente mes, se registran **diariamente**
+- Proceso:
+  1. Crear factura en **modulo de compras** > recepciones > factura de compras
+  2. Buscar proveedor (banco)
+  3. Relacionar factura con el dia
+  4. Producto: **"comision terminal"**
+  5. Calcular comisiones del dia desde Excel
+  6. Poner tasa de IVA
+  7. Guardar
+  8. Ir a **pagos** > programar manualmente (Ctrl+F8)
+  9. Ir a **bancos** > crear poliza > egresos compra transferencia
+  10. Buscar proveedor > clase: comisiones bancarias
+  11. Buscar factura programada
+  12. **Conciliado y afectar**
+
+#### e) Pago de Impuestos
+**[49:13 - 50:38]**
+- Manual
+- Tipo de movimiento: **Egresos varios**
+- Configurar: monto, fecha, concepto "pago de impuestos"
+- Guardar para habilitar parte inferior
+- Capturar cuentas contables correspondientes
+- Diferentes contribuciones tienen su cuenta contable
+- Contribuciones de seguridad social e Infonavit
+- Se ocupa el **resumen de liquidacion** para clasificar
+
+---
+
+## 16. Registro de Ingresos
+
+### a) Ventas con Tarjeta
+**[51:25 - 57:04]**
+
+- La cuenta de tarjetas de credito funciona igual (facturas programadas)
+- Los abonos de tarjeta de debito son traspasos de cuenta principal
+- Para ingresos se usa la **cuenta de tarjetas** (ventas con tarjeta de debito/credito)
+
+**Proceso:**
+1. Organizar **reporte de ventas** (lo comparte el departamento de tesoreria)
+2. El reporte contiene: factura global, facturas individuales, cantidades con tarjeta
+3. Los depositos del dia corresponden a ventas del dia anterior (se reflejan un dia despues)
+4. Se clasifican por color para identificar ventas del dia
+5. Se capturan manualmente en el modulo de bancos:
+   - Ingresos > **Venta diaria** > Aceptar
+   - Seleccionar fecha, clase de movimiento: venta diaria
+   - Concepto: venta diaria del dia
+   - Forma de pago: segun estado de cuenta (tarjeta credito o debito)
+   - Guardar > Agregar factura serie **FD**
+   - Numero de factura esta en el Drive (factura global)
+6. La factura global se separa en ventas con tarjeta y ventas en efectivo facturadas al publico en general
+7. El ingreso se toma del estado de cuenta
+8. **Conciliado, guardar**
+9. Polizas > clic derecho > **Regenerar poliza contable** (no se hace automatico)
+
+### b) Ventas en Efectivo
+**[57:29 - 1:01:44]**
+
+- Los depositos en efectivo se depositan al dia siguiente (maximo 2 dias despues)
+- Aparecen como **depositos en efectivo** en estado de cuenta
+- Debe coincidir con el Drive donde tesoreria reporta los ingresos
+- Tesoreria llena los cortes y depositos
+
+**Proceso:**
+1. Registrar en bancos > ingreso > **venta diaria**
+2. Todas las ventas con factura son "ingresos venta diaria"
+3. Seleccionar fecha, concepto
+4. Con la factura se pone el monto automaticamente
+5. Tipo de venta: **efectivo** (porque son depositos)
+6. Guardar y habilitar parte inferior
+7. Capturar segun el Drive: facturas individuales del dia
+8. Cada factura individual se agrega una por una en la misma poliza
+9. Al final se agrega la **global** con el remanente que debe quedar
+10. **Conciliado, guardar poliza y regenerar poliza contable**
+
+**Composicion:** Las ventas estan compuestas por las individuales y al final la global.
+
+### c) Pagos de Clientes Especificos
+**[1:02:43 - 1:06:27]**
+
+- Rara vez algun ingreso por devoluciones de IVA
+- Facturas de clientes especificos (los que requieren factura con RFC especifico)
+- Se manejan en el **modulo de comercial** (no el de ventas)
+
+**Proceso:**
+1. Modulo de comercial > **cobranza** > crear cobro multiple
+2. Listado de clientes que piden factura
+3. Facturas timbradas son serie **FC** (las demas son remisiones o saldos anteriores)
+4. Cuando el ingreso aparece en estado de cuenta:
+   - Seleccionar factura
+   - Procesar
+   - Fecha de cobro segun estado de cuenta
+   - Forma de pago: transferencia
+   - Banco: B Regio
+   - Cuenta segun estado de cuenta
+   - **Afectar**
+5. Aparece automaticamente en modulo de bancos > ingresos
+6. Solo dar **conciliado y guardar**
+
+### d) Ingresos Varios (Devoluciones, etc.)
+**[1:06:27 - 1:09:24]**
+
+- Rara vez se ocupa un registro manual en bancos
+- Ejemplo: devolucion de IVA
+
+**Proceso:**
+1. Estar en la cuenta correcta
+2. Opcion "mas" > **Ingresos varios**
+3. Seleccionar fecha, concepto (devoluciones Hacienda)
+4. Forma de pago: transferencia
+5. Guardar > agregar cuentas contables
+6. Si la devolucion no tiene intereses a favor: poner cantidad total
+7. Si tiene intereses: usar cuenta de intereses por devoluciones de IVA
+8. Verificar que no haya diferencias en cargos y abonos
+9. **Conciliado y guardar**
+
+---
+
+## 17. Requerimientos y Siguientes Pasos
+
+**[1:09:24 - 1:11:04]**
+
+### Listado de requerimientos pendientes:
+1. **Listado de capturas manuales** - Detalle de todo lo que hacen de captura manual en ingresos y egresos
+2. **Ejemplos de Exceles** - Incluyendo el de tesoreria
+3. **Accesos a plataformas** - Usuario bot para ERP, acceso al Drive y Excel
+4. **Ejemplo de PDF de nomina** - Reporte/lista de raya del sistema de nominas
+5. **Acceso al Excel de recepcion** - Pestana "copia recepcion"
+6. **Correo de cuenta** - Para crear las cuentas necesarias
+
+### Tareas del equipo tecnico (Neuria):
+1. Analizar la lectura de remisiones y como vincularlas con productos
+2. Hacer cambio en el mapeo del proceso de remisiones
+3. Evaluar sugerencias para el match de remisiones con productos
+4. Mapear el proceso completo de conciliacion bancaria
+5. Presentar avances y resolver dudas pendientes
+
+### Procesos pendientes por mapear:
+- ~~Captura de remisiones~~ (visto parcialmente)
+- ~~Conciliacion de remisiones~~ (visto parcialmente)
+- Captura de facturas del SAT
+- Conciliacion del ERP contra el SAT
+- Conciliacion de pagos del ERP contra el banco
+
+---
+
+## Resumen de Procesos Identificados
+
+| Proceso | Tipo | Estado |
+|---------|------|--------|
+| Recepcion de mercancia (AppSheets + Drive) | Automatizado parcialmente | En analisis |
+| Captura de remisiones en ERP | Manual | Pendiente automatizar |
+| Programacion de pagos a proveedores | Semi-automatico (SAP) | En analisis |
+| Generacion de layout bancario | Automatico | Funcional |
+| Afectacion de pagos en bancos | Manual | Pendiente automatizar |
+| Registro de nomina | Manual | Pendiente automatizar |
+| Comisiones bancarias | Manual | Pendiente automatizar |
+| Traspasos entre cuentas | Manual | Pendiente automatizar |
+| Pago de impuestos | Manual | Pendiente automatizar |
+| Ventas con tarjeta (ingresos) | Manual | Pendiente automatizar |
+| Ventas en efectivo (ingresos) | Manual | Pendiente automatizar |
+| Cobro a clientes especificos | Semi-automatico | En analisis |
+| Devoluciones IVA (ingresos varios) | Manual | Pendiente automatizar |
+| Conciliacion bancaria | Manual (Excel vs ERP) | Pendiente automatizar |

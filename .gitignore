@@ -1,0 +1,28 @@
+# Entorno virtual
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Variables de entorno
+.env
+
+# Material pesado de referencia (frames del video)
+contexto/frames/
+
+# macOS
+.DS_Store
+
+# Datos y logs
+data/
+logs/
+
+# Certificados y credenciales
+*.pem
+*.key
+*.cer
+
+# IDE
+.idea/
+.vscode/
+*.swp

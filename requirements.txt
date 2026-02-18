@@ -1,0 +1,16 @@
+# Core
+python-dotenv>=1.0.0
+pyodbc>=4.0.39
+
+# Reportes
+openpyxl>=3.1.0
+pandas>=2.0.0
+
+# PDF parsing
+pdfplumber>=0.10.0
+
+# Logging
+loguru>=0.7.0
+
+# Testing
+pytest>=7.4.0
