@@ -178,3 +178,9 @@ class CuentasContables:
 
     # Impuesto estatal
     NOMINAS_3_PCT = ('6200', '850000')
+
+    # IMSS / INFONAVIT
+    IMSS_GASTO = ('6200', '070000')              # I.M.S.S. (gasto patronal)
+    APORTACION_2PCT_SAR = ('6200', '028000')     # Aportacion 2% S.A.R. (Retiro)
+    CESANTIA_VEJEZ = ('6200', '360000')          # Cesantia y Vejez
+    INFONAVIT_5PCT = ('6200', '050000')          # 5% INFONAVIT

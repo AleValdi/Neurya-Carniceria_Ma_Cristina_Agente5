@@ -92,6 +92,13 @@ PATRONES: List[Tuple[re.Pattern, TipoProceso, Optional[str]]] = [
         None,
     ),
 
+    # --- IMSS/INFONAVIT (pago SUA/SIPARE) ---
+    (
+        re.compile(r'\(BE\)\s*Pago servicio.*PAGO SUA', re.IGNORECASE),
+        TipoProceso.IMPUESTO_IMSS,
+        '055003730017',
+    ),
+
     # --- Pagos SPEI a proveedores (ultimo recurso para egresos) ---
     # Patron: cadena alfanumerica seguida de SPEI
     (

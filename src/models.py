@@ -188,6 +188,40 @@ class DatosImpuestoEstatal:
     advertencias: List[str] = field(default_factory=list)
 
 
+@dataclass
+class DatosIMSS:
+    """Datos parseados del Resumen de Liquidacion SUA (IMSS/INFONAVIT)."""
+    periodo: str                    # 'ENERO 2026' o 'OCTUBRE 2025'
+    folio_sua: str                  # '659522'
+
+    # IMSS (siempre presente)
+    total_imss: Decimal             # Subtotal seccion "Para abono en cuenta del IMSS"
+
+    # Cuenta Individual (solo bimestral)
+    retiro: Decimal = field(default_factory=lambda: Decimal('0'))
+    cesantia_vejez: Decimal = field(default_factory=lambda: Decimal('0'))
+    total_cuenta_individual: Decimal = field(default_factory=lambda: Decimal('0'))
+
+    # INFONAVIT (solo bimestral)
+    aportacion_sin_credito: Decimal = field(default_factory=lambda: Decimal('0'))
+    aportacion_con_credito: Decimal = field(default_factory=lambda: Decimal('0'))
+    amortizacion: Decimal = field(default_factory=lambda: Decimal('0'))
+    total_infonavit: Decimal = field(default_factory=lambda: Decimal('0'))
+
+    # Total
+    total_a_pagar: Decimal = field(default_factory=lambda: Decimal('0'))
+
+    # Flags
+    incluye_infonavit: bool = False
+    confianza_100: bool = False
+    advertencias: List[str] = field(default_factory=list)
+
+    @property
+    def infonavit_5pct(self) -> Decimal:
+        """5% INFONAVIT = Ap. sin credito + Ap. con credito."""
+        return self.aportacion_sin_credito + self.aportacion_con_credito
+
+
 # --- Modelos de salida (procesadores → BD) ---
 
 @dataclass

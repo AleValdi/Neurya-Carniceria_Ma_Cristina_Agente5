@@ -353,12 +353,13 @@ def cmd_procesar(args):
         ruta_ieps = Path(args.detalle_ieps) if args.detalle_ieps else None
         ruta_decl = Path(args.declaracion_completa) if args.declaracion_completa else None
         ruta_est = Path(args.impuesto_estatal) if args.impuesto_estatal else None
+        ruta_imss = Path(args.imss) if args.imss else None
 
         # Validar que existen
         for ruta, nombre in [
             (ruta_af1, 'acuse-federal-1'), (ruta_af2, 'acuse-federal-2'),
             (ruta_ieps, 'detalle-ieps'), (ruta_decl, 'declaracion-completa'),
-            (ruta_est, 'impuesto-estatal'),
+            (ruta_est, 'impuesto-estatal'), (ruta_imss, 'imss'),
         ]:
             if ruta and not ruta.exists():
                 logger.error("Archivo no encontrado (--{}): {}", nombre, ruta)
@@ -371,6 +372,7 @@ def cmd_procesar(args):
             ruta_detalle_ieps=ruta_ieps,
             ruta_declaracion_completa=ruta_decl,
             ruta_impuesto_estatal=ruta_est,
+            ruta_imss=ruta_imss,
             dry_run=dry_run,
             solo_fecha=solo_fecha,
             confirmar=confirmar,
@@ -473,6 +475,11 @@ def main():
         '--impuesto-estatal',
         default=None,
         help='Ruta al PDF de 3%% nomina estatal',
+    )
+    parser_procesar.add_argument(
+        '--imss',
+        default=None,
+        help='Ruta al PDF Resumen de Liquidacion SUA (IMSS/INFONAVIT)',
     )
     parser_procesar.add_argument(
         '--fecha',

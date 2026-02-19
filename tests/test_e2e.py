@@ -738,6 +738,111 @@ class TestE2ENomina:
                         limpiar_resultado(cursor, resultado)
 
 
+class TestE2EIMSS:
+    """E2E: IMSS solo (enero 2026, pagado feb 9, $93,880.17)."""
+
+    @pytest.fixture
+    def ruta_imss_pdf(self):
+        """Ruta al PDF Resumen de Liquidacion SUA (solo IMSS)."""
+        ruta = ROOT / 'contexto' / 'ConciliacionImssInfonavit' / 'resumen liquidacion_gbl1.pdf'
+        if not ruta.exists():
+            pytest.skip(f'PDF no disponible: {ruta}')
+        return ruta
+
+    def test_imss_un_dia(self, connector, ruta_ec, ruta_imss_pdf):
+        """Ejecuta IMSS de feb 9 contra sandbox y verifica."""
+        from src.orquestador import procesar_impuestos
+
+        fecha = date(2026, 2, 9)
+
+        resultados = procesar_impuestos(
+            ruta_estado_cuenta=ruta_ec,
+            ruta_imss=ruta_imss_pdf,
+            dry_run=False,
+            solo_fecha=fecha,
+            connector=connector,
+        )
+
+        try:
+            exitosos = [r for r in resultados if r.exito]
+            assert len(exitosos) > 0, (
+                f"Ningun resultado exitoso. Errores: "
+                f"{[r.error for r in resultados if not r.exito]}"
+            )
+
+            folios_todos = []
+            for resultado in exitosos:
+                folios_todos.extend(resultado.folios)
+
+            # Debe haber exactamente 1 folio (1 movimiento IMSS)
+            assert len(folios_todos) == 1, (
+                f"IMSS debe generar 1 folio, tiene {len(folios_todos)}"
+            )
+
+            folio = folios_todos[0]
+            cursor_lectura = connector.db.conectar().cursor()
+            mov = verificar_movimiento(cursor_lectura, folio)
+            assert mov, f"Folio {folio} no encontrado en BD"
+
+            # Verificar campos del movimiento
+            assert mov['Tipo'] == 2, "IMSS debe ser Tipo 2"
+            assert mov['Clase'] == 'PAGO IMSS'
+            assert mov['TipoEgreso'] == 'TRANSFERENCIA'
+            assert mov['TipoPoliza'] == 'EGRESO'
+            assert mov['Cia'] == 'DCM'
+            assert mov['Fuente'] == 'SAV7-CHEQUES'
+            assert mov['Capturo'] == 'AGENTE5'
+            assert mov['NumPoliza'] > 0
+            assert Decimal(str(mov['Egreso'])) == Decimal('93880.17')
+
+            # Verificar concepto
+            assert 'PAGO SUA' in mov['Concepto'].upper()
+            assert 'ENERO 2026' in mov['Concepto'].upper()
+
+            # Poliza balanceada con 3 lineas (solo IMSS)
+            assert verificar_balance_poliza(cursor_lectura, folio), (
+                f"Poliza desbalanceada para folio {folio}"
+            )
+            lineas = verificar_poliza(cursor_lectura, folio)
+            assert len(lineas) == 3, (
+                f"IMSS solo debe tener 3 lineas de poliza, tiene {len(lineas)}"
+            )
+
+            # Verificar estructura de poliza:
+            # Linea 1: Cargo 2140/010000 (Retencion IMSS)
+            assert lineas[0]['Cuenta'] == '2140'
+            assert lineas[0]['SubCuenta'] == '010000'
+            assert lineas[0]['TipoCA'] == 1  # CARGO
+
+            # Linea 2: Cargo 6200/070000 (IMSS Gasto)
+            assert lineas[1]['Cuenta'] == '6200'
+            assert lineas[1]['SubCuenta'] == '070000'
+            assert lineas[1]['TipoCA'] == 1  # CARGO
+
+            # Linea 3: Abono 1120/040000 (Banco)
+            assert lineas[2]['Cuenta'] == '1120'
+            assert lineas[2]['SubCuenta'] == '040000'
+            assert lineas[2]['TipoCA'] == 2  # ABONO
+            assert Decimal(str(lineas[2]['Abono'])) == Decimal('93880.17')
+
+            # Retencion + Gasto = Total
+            retencion = Decimal(str(lineas[0]['Cargo']))
+            gasto = Decimal(str(lineas[1]['Cargo']))
+            assert retencion + gasto == Decimal('93880.17'), (
+                f"Ret({retencion}) + Gasto({gasto}) != 93880.17"
+            )
+
+            # No debe tener facturas PMF
+            facts = verificar_facturas_pmf(cursor_lectura, folio)
+            assert len(facts) == 0, "IMSS no debe tener SAVCheqPMF"
+
+        finally:
+            with connector.get_cursor(transaccion=True) as cursor:
+                for resultado in resultados:
+                    if resultado.exito:
+                        limpiar_resultado(cursor, resultado)
+
+
 class TestE2EImpuestos:
     """E2E: Impuestos federales y estatal (enero 2026, pagados feb 11)."""
 

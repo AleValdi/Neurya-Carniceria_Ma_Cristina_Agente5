@@ -32,7 +32,7 @@ from src.models import (
     ResultadoProceso,
     TipoProceso,
 )
-from src.entrada.impuestos_pdf import parsear_impuesto_estatal, parsear_impuesto_federal
+from src.entrada.impuestos_pdf import parsear_imss, parsear_impuesto_estatal, parsear_impuesto_federal
 from src.entrada.nomina import parsear_nomina
 from src.procesadores.comisiones import ProcesadorComisiones
 from src.procesadores.conciliacion_cobros import ProcesadorConciliacionCobros
@@ -634,12 +634,13 @@ def procesar_impuestos(
     ruta_detalle_ieps: Optional[Path] = None,
     ruta_declaracion_completa: Optional[Path] = None,
     ruta_impuesto_estatal: Optional[Path] = None,
+    ruta_imss: Optional[Path] = None,
     dry_run: bool = True,
     solo_fecha: Optional[date] = None,
     connector: Optional[SAV7Connector] = None,
     confirmar: bool = False,
 ) -> List[ResultadoProceso]:
-    """Procesa impuestos federales y estatal: parse -> clasifica -> plan -> ejecuta."""
+    """Procesa impuestos federales, estatal e IMSS: parse -> clasifica -> plan -> ejecuta."""
     resultados: List[ResultadoProceso] = []
 
     # 1. Parsear estado de cuenta
@@ -676,12 +677,26 @@ def procesar_impuestos(
     else:
         logger.info("Sin formato estatal — solo se procesara federal")
 
+    datos_imss = None
+    if ruta_imss:
+        datos_imss = parsear_imss(ruta_imss)
+        if datos_imss:
+            logger.info(
+                "IMSS parseado: periodo={}, total=${:,.2f}, infonavit={}, confianza={}",
+                datos_imss.periodo, datos_imss.total_a_pagar,
+                datos_imss.incluye_infonavit, datos_imss.confianza_100,
+            )
+
     # 3. Clasificar movimientos
     logger.info("=== FASE 2: Clasificando movimientos ===")
     clasificar_movimientos(movimientos)
 
     # 4. Filtrar impuestos
-    tipos_impuesto = (TipoProceso.IMPUESTO_FEDERAL, TipoProceso.IMPUESTO_ESTATAL)
+    tipos_impuesto = (
+        TipoProceso.IMPUESTO_FEDERAL,
+        TipoProceso.IMPUESTO_ESTATAL,
+        TipoProceso.IMPUESTO_IMSS,
+    )
     impuestos = [m for m in movimientos if m.tipo_proceso in tipos_impuesto]
 
     if not impuestos:
@@ -717,11 +732,18 @@ def procesar_impuestos(
             fecha, len(movs_dia),
         )
 
+        # Obtener cursor de lectura para consultas de balanza (IMSS)
+        cursor_lectura = None
+        if datos_imss:
+            cursor_lectura = _obtener_cursor_lectura(db_connector)
+
         plan = procesador.construir_plan(
             movimientos=movs_dia,
             fecha=fecha,
             datos_federal=datos_federal,
             datos_estatal=datos_estatal,
+            datos_imss=datos_imss,
+            cursor=cursor_lectura,
         )
 
         _mostrar_plan(plan)

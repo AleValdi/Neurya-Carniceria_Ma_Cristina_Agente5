@@ -1,6 +1,6 @@
-"""Procesador E5: Impuestos Federales y Estatales.
+"""Procesador E5: Impuestos Federales, Estatales e IMSS/INFONAVIT.
 
-Genera movimientos bancarios y polizas para 3 tipos de pago de impuestos:
+Genera movimientos bancarios y polizas para 4 tipos de pago de impuestos:
 
 A. Federal 1a Declaracion — Retenciones + IEPS
    - 1 movimiento + 5 lineas de poliza
@@ -11,6 +11,12 @@ B. Federal 2a Declaracion — ISR + IVA
 
 C. Estatal 3% Nomina
    - 1 movimiento + 2 lineas de poliza
+
+D. IMSS solo (mensual)
+   - 1 movimiento + 3 lineas de poliza
+
+E. IMSS + INFONAVIT (bimestral)
+   - 1 movimiento + 7 lineas de poliza
 """
 
 from datetime import date
@@ -21,6 +27,7 @@ from loguru import logger
 
 from config.settings import CuentasContables
 from src.models import (
+    DatosIMSS,
     DatosImpuestoEstatal,
     DatosImpuestoFederal,
     DatosMovimientoPM,
@@ -30,6 +37,12 @@ from src.models import (
     TipoCA,
     TipoProceso,
 )
+
+# Mapeo mes numero → nombre columna SAVContabSaldoS
+_MESES_BALANZA = {
+    1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
+    7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic',
+}
 
 
 BANCO = 'BANREGIO'
@@ -42,7 +55,11 @@ class ProcesadorImpuestos:
 
     @property
     def tipos_soportados(self) -> List[TipoProceso]:
-        return [TipoProceso.IMPUESTO_FEDERAL, TipoProceso.IMPUESTO_ESTATAL]
+        return [
+            TipoProceso.IMPUESTO_FEDERAL,
+            TipoProceso.IMPUESTO_ESTATAL,
+            TipoProceso.IMPUESTO_IMSS,
+        ]
 
     def construir_plan(
         self,
@@ -51,6 +68,7 @@ class ProcesadorImpuestos:
         cursor=None,
         datos_federal: Optional[DatosImpuestoFederal] = None,
         datos_estatal: Optional[DatosImpuestoEstatal] = None,
+        datos_imss: Optional[DatosIMSS] = None,
         **kwargs,
     ) -> PlanEjecucion:
         """Construye plan para pago de impuestos.
@@ -60,6 +78,8 @@ class ProcesadorImpuestos:
             fecha: Fecha de los movimientos.
             datos_federal: Datos parseados de acuses federales.
             datos_estatal: Datos parseados de formato estatal.
+            datos_imss: Datos parseados del Resumen de Liquidacion SUA.
+            cursor: Cursor de BD para consultar balanza (retencion IMSS).
         """
         plan = PlanEjecucion(
             tipo_proceso='IMPUESTOS',
@@ -74,6 +94,7 @@ class ProcesadorImpuestos:
         # Separar por tipo
         federales = [m for m in movimientos if m.tipo_proceso == TipoProceso.IMPUESTO_FEDERAL]
         estatales = [m for m in movimientos if m.tipo_proceso == TipoProceso.IMPUESTO_ESTATAL]
+        imss = [m for m in movimientos if m.tipo_proceso == TipoProceso.IMPUESTO_IMSS]
 
         # --- Federal ---
         if federales:
@@ -82,6 +103,10 @@ class ProcesadorImpuestos:
         # --- Estatal ---
         if estatales:
             self._procesar_estatal(plan, estatales, fecha, datos_estatal)
+
+        # --- IMSS / INFONAVIT ---
+        if imss:
+            self._procesar_imss(plan, imss, fecha, datos_imss, cursor)
 
         return plan
 
@@ -529,3 +554,300 @@ class ProcesadorImpuestos:
         plan.validaciones.append(
             f"Estatal 3% nomina: ${datos.monto:,.2f} {periodo}"
         )
+
+    # --- IMSS / INFONAVIT ---
+
+    def _procesar_imss(
+        self,
+        plan: PlanEjecucion,
+        movimientos: List[MovimientoBancario],
+        fecha: date,
+        datos: Optional[DatosIMSS],
+        cursor=None,
+    ):
+        """Genera movimiento y poliza para pago IMSS (y opcionalmente INFONAVIT)."""
+        if datos is None:
+            plan.advertencias.append(
+                "Sin datos de IMSS/SUA — no se pueden generar movimientos"
+            )
+            return
+
+        if not datos.confianza_100:
+            plan.advertencias.append(
+                "Datos IMSS sin 100% de confianza — no se generan movimientos"
+            )
+            for adv in datos.advertencias:
+                plan.advertencias.append(f"  PDF: {adv}")
+            return
+
+        # Buscar movimiento bancario que coincida con total_a_pagar
+        mov_imss = None
+        for mov in movimientos:
+            if mov.monto == datos.total_a_pagar:
+                mov_imss = mov
+                break
+
+        if mov_imss is None:
+            plan.advertencias.append(
+                f"No se encontro movimiento bancario para IMSS "
+                f"(${datos.total_a_pagar:,.2f})"
+            )
+            return
+
+        # Obtener retencion IMSS de balanza (M-2)
+        retencion_imss = self._obtener_retencion_imss(cursor, fecha)
+        if retencion_imss is None:
+            plan.advertencias.append(
+                "No se pudo obtener retencion IMSS de la balanza (SAVContabSaldoS). "
+                "Se requiere cursor de BD."
+            )
+            return
+
+        # Calcular gasto IMSS
+        imss_gasto = datos.total_imss - retencion_imss
+        if imss_gasto < 0:
+            plan.advertencias.append(
+                f"Retencion IMSS (${retencion_imss:,.2f}) > Total IMSS "
+                f"(${datos.total_imss:,.2f}) — calculo negativo"
+            )
+            return
+
+        periodo = datos.periodo
+
+        if datos.incluye_infonavit:
+            self._generar_imss_infonavit(
+                plan, fecha, datos, periodo, retencion_imss, imss_gasto,
+            )
+        else:
+            self._generar_imss_solo(
+                plan, fecha, datos, periodo, retencion_imss, imss_gasto,
+            )
+
+    def _generar_imss_solo(
+        self,
+        plan: PlanEjecucion,
+        fecha: date,
+        datos: DatosIMSS,
+        periodo: str,
+        retencion_imss: Decimal,
+        imss_gasto: Decimal,
+    ):
+        """Genera 1 movimiento + 3 lineas poliza para pago solo IMSS (mensual)."""
+        concepto = f"PAGO SUA {periodo}"
+
+        # Movimiento PM
+        plan.movimientos_pm.append(DatosMovimientoPM(
+            banco=BANCO,
+            cuenta=CUENTA_EFECTIVO,
+            age=fecha.year,
+            mes=fecha.month,
+            dia=fecha.day,
+            tipo=TIPO_EGRESO_MANUAL,
+            ingreso=Decimal('0'),
+            egreso=datos.total_a_pagar,
+            concepto=concepto,
+            clase='PAGO IMSS',
+            fpago=None,
+            tipo_egreso='TRANSFERENCIA',
+            conciliada=1,
+            paridad=Decimal('1.0000'),
+            tipo_poliza='EGRESO',
+            num_factura='',
+        ))
+
+        # Poliza: 3 lineas
+        cta = CuentasContables
+        lineas = [
+            # 1. Cargo Retencion IMSS (de balanza M-2)
+            LineaPoliza(
+                movimiento=1,
+                cuenta=cta.RETENCION_IMSS[0],
+                subcuenta=cta.RETENCION_IMSS[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=retencion_imss,
+                abono=Decimal('0'),
+                concepto=f"Retencion IMSS {periodo}",
+            ),
+            # 2. Cargo IMSS Gasto (total_imss - retencion)
+            LineaPoliza(
+                movimiento=2,
+                cuenta=cta.IMSS_GASTO[0],
+                subcuenta=cta.IMSS_GASTO[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=imss_gasto,
+                abono=Decimal('0'),
+                concepto=f"I.M.S.S. {periodo}",
+            ),
+            # 3. Abono Banco (total pago)
+            LineaPoliza(
+                movimiento=3,
+                cuenta=cta.BANCO_EFECTIVO[0],
+                subcuenta=cta.BANCO_EFECTIVO[1],
+                tipo_ca=TipoCA.ABONO,
+                cargo=Decimal('0'),
+                abono=datos.total_a_pagar,
+                concepto=f"Banco: BANREGIO {concepto}",
+            ),
+        ]
+        plan.lineas_poliza.extend(lineas)
+        plan.facturas_por_movimiento.append(0)
+        plan.lineas_por_movimiento.append(3)
+
+        plan.validaciones.append(
+            f"IMSS solo: ${datos.total_a_pagar:,.2f} = "
+            f"Ret ${retencion_imss:,.2f} + Gasto ${imss_gasto:,.2f}"
+        )
+
+    def _generar_imss_infonavit(
+        self,
+        plan: PlanEjecucion,
+        fecha: date,
+        datos: DatosIMSS,
+        periodo: str,
+        retencion_imss: Decimal,
+        imss_gasto: Decimal,
+    ):
+        """Genera 1 movimiento + 7 lineas poliza para pago IMSS+INFONAVIT (bimestral)."""
+        concepto = f"PAGO IMSS E INFONAVIT {periodo}"
+
+        # Movimiento PM
+        plan.movimientos_pm.append(DatosMovimientoPM(
+            banco=BANCO,
+            cuenta=CUENTA_EFECTIVO,
+            age=fecha.year,
+            mes=fecha.month,
+            dia=fecha.day,
+            tipo=TIPO_EGRESO_MANUAL,
+            ingreso=Decimal('0'),
+            egreso=datos.total_a_pagar,
+            concepto=concepto,
+            clase='PAGO IMSS',
+            fpago=None,
+            tipo_egreso='TRANSFERENCIA',
+            conciliada=1,
+            paridad=Decimal('1.0000'),
+            tipo_poliza='EGRESO',
+            num_factura='',
+        ))
+
+        # Poliza: 7 lineas
+        cta = CuentasContables
+        lineas = [
+            # 1. Cargo Retencion IMSS (de balanza M-2)
+            LineaPoliza(
+                movimiento=1,
+                cuenta=cta.RETENCION_IMSS[0],
+                subcuenta=cta.RETENCION_IMSS[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=retencion_imss,
+                abono=Decimal('0'),
+                concepto=f"Retencion IMSS {periodo}",
+            ),
+            # 2. Cargo IMSS Gasto (total_imss - retencion)
+            LineaPoliza(
+                movimiento=2,
+                cuenta=cta.IMSS_GASTO[0],
+                subcuenta=cta.IMSS_GASTO[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=imss_gasto,
+                abono=Decimal('0'),
+                concepto=f"I.M.S.S. {periodo}",
+            ),
+            # 3. Cargo Retiro (2% SAR)
+            LineaPoliza(
+                movimiento=3,
+                cuenta=cta.APORTACION_2PCT_SAR[0],
+                subcuenta=cta.APORTACION_2PCT_SAR[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=datos.retiro,
+                abono=Decimal('0'),
+                concepto=f"Aportacion 2% S.A.R. {periodo}",
+            ),
+            # 4. Cargo Cesantia y Vejez
+            LineaPoliza(
+                movimiento=4,
+                cuenta=cta.CESANTIA_VEJEZ[0],
+                subcuenta=cta.CESANTIA_VEJEZ[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=datos.cesantia_vejez,
+                abono=Decimal('0'),
+                concepto=f"Cesantia y Vejez {periodo}",
+            ),
+            # 5. Cargo 5% INFONAVIT (Ap. sin credito + Ap. con credito)
+            LineaPoliza(
+                movimiento=5,
+                cuenta=cta.INFONAVIT_5PCT[0],
+                subcuenta=cta.INFONAVIT_5PCT[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=datos.infonavit_5pct,
+                abono=Decimal('0'),
+                concepto=f"5% INFONAVIT {periodo}",
+            ),
+            # 6. Cargo Retencion INFONAVIT (Amortizacion)
+            LineaPoliza(
+                movimiento=6,
+                cuenta=cta.RETENCION_INFONAVIT[0],
+                subcuenta=cta.RETENCION_INFONAVIT[1],
+                tipo_ca=TipoCA.CARGO,
+                cargo=datos.amortizacion,
+                abono=Decimal('0'),
+                concepto=f"Retencion INFONAVIT {periodo}",
+            ),
+            # 7. Abono Banco (total pago)
+            LineaPoliza(
+                movimiento=7,
+                cuenta=cta.BANCO_EFECTIVO[0],
+                subcuenta=cta.BANCO_EFECTIVO[1],
+                tipo_ca=TipoCA.ABONO,
+                cargo=Decimal('0'),
+                abono=datos.total_a_pagar,
+                concepto=f"Banco: BANREGIO {concepto}",
+            ),
+        ]
+        plan.lineas_poliza.extend(lineas)
+        plan.facturas_por_movimiento.append(0)
+        plan.lineas_por_movimiento.append(7)
+
+        plan.validaciones.append(
+            f"IMSS+INFONAVIT: ${datos.total_a_pagar:,.2f} = "
+            f"Ret ${retencion_imss:,.2f} + Gasto ${imss_gasto:,.2f} + "
+            f"Retiro ${datos.retiro:,.2f} + Cesantia ${datos.cesantia_vejez:,.2f} + "
+            f"5%INFO ${datos.infonavit_5pct:,.2f} + Amort ${datos.amortizacion:,.2f}"
+        )
+
+    @staticmethod
+    def _obtener_retencion_imss(cursor, fecha_registro: date) -> Optional[Decimal]:
+        """Consulta SAVContabSaldoS para Abonos de 2140/010000 del mes M-2.
+
+        La retencion IMSS (parte del trabajador) se acumula como Abonos en la
+        cuenta 2140/010000. Para el pago de IMSS, se toma el valor del mes
+        que esta 2 meses antes de la fecha de registro del movimiento bancario.
+
+        Ejemplo: pago registrado en Feb 2026 → consulta DicAbonos 2025.
+        """
+        if cursor is None:
+            return None
+
+        # Calcular mes M-2
+        mes_m2 = fecha_registro.month - 2
+        anio_m2 = fecha_registro.year
+        if mes_m2 <= 0:
+            mes_m2 += 12
+            anio_m2 -= 1
+
+        col = f"{_MESES_BALANZA[mes_m2]}Abonos"
+
+        try:
+            cursor.execute(
+                f"SELECT {col} FROM SAVContabSaldoS "
+                "WHERE Cuenta = '2140' AND SubCuenta = '010000' "
+                "AND PeriodoAge = ?",
+                (anio_m2,),
+            )
+            row = cursor.fetchone()
+            if row and row[0]:
+                return Decimal(str(row[0]))
+            return None
+        except Exception as e:
+            logger.error("Error consultando retencion IMSS: {}", e)
+            return None

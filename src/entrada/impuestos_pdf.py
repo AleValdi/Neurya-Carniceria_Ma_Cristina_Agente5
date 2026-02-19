@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple
 from loguru import logger
 
 from src.models import (
+    DatosIMSS,
     DatosImpuestoEstatal,
     DatosImpuestoFederal,
     RetencionIVAProveedor,
@@ -760,6 +761,194 @@ def parsear_impuesto_estatal(ruta_pdf: Path) -> Optional[DatosImpuestoEstatal]:
     logger.info(
         "Impuesto estatal parseado: periodo={}, monto=${:,.2f}, confianza={}",
         periodo, monto, confianza_100,
+    )
+
+    return resultado
+
+
+# --- Parser IMSS/INFONAVIT (Resumen de Liquidacion SUA) ---
+
+
+# Meses para normalizar periodo
+_MESES_IMSS = {
+    'enero': 'ENERO', 'febrero': 'FEBRERO', 'marzo': 'MARZO',
+    'abril': 'ABRIL', 'mayo': 'MAYO', 'junio': 'JUNIO',
+    'julio': 'JULIO', 'agosto': 'AGOSTO', 'septiembre': 'SEPTIEMBRE',
+    'octubre': 'OCTUBRE', 'noviembre': 'NOVIEMBRE', 'diciembre': 'DICIEMBRE',
+}
+
+
+def parsear_imss(ruta_pdf: Path) -> Optional[DatosIMSS]:
+    """Parsea un Resumen de Liquidacion del SUA (IMSS/INFONAVIT).
+
+    Extrae montos de las secciones:
+    - Para abono en cuenta del IMSS (siempre)
+    - Para abono en cuenta individual (solo bimestral)
+    - Para abono en cuenta del INFONAVIT (solo bimestral)
+
+    Args:
+        ruta_pdf: Ruta al PDF del Resumen de Liquidacion SUA.
+
+    Returns:
+        DatosIMSS con los montos parseados, o None si falla.
+    """
+    texto = _extraer_texto_pdf(ruta_pdf)
+    if not texto:
+        return None
+
+    advertencias: List[str] = []
+
+    # --- Detectar si incluye INFONAVIT (bimestral) ---
+    incluye_infonavit = 'Bimestre de Proceso' in texto
+
+    # --- Periodo ---
+    periodo = ''
+    m_periodo = re.search(r'Mes de Proceso:\s*(\w+)-(\d{4})', texto)
+    if m_periodo:
+        mes_raw = m_periodo.group(1).lower()
+        anio = m_periodo.group(2)
+        mes_norm = _MESES_IMSS.get(mes_raw, mes_raw.upper())
+        periodo = f"{mes_norm} {anio}"
+    else:
+        advertencias.append("No se pudo extraer periodo (Mes de Proceso)")
+
+    # --- Folio SUA ---
+    folio_sua = ''
+    m_folio = re.search(r'Folio SUA:\s*(\d+)', texto)
+    if m_folio:
+        folio_sua = m_folio.group(1)
+    else:
+        advertencias.append("No se pudo extraer Folio SUA")
+
+    # --- Seccion IMSS: S U B T O T A L despues de "Para abono en cuenta del IMSS" ---
+    total_imss = Decimal('0')
+    m_imss = re.search(
+        r'Para abono en cuenta del IMSS.*?S\s*U\s*B\s*T\s*O\s*T\s*A\s*L\s+([\d,.]+)',
+        texto, re.DOTALL,
+    )
+    if m_imss:
+        total_imss = _parsear_monto(m_imss.group(1)) or Decimal('0')
+    else:
+        advertencias.append("No se pudo extraer subtotal IMSS")
+
+    # --- Seccion Cuenta Individual ---
+    retiro = Decimal('0')
+    cesantia_vejez = Decimal('0')
+    total_cuenta_individual = Decimal('0')
+
+    m_retiro = re.search(
+        r'Para abono en cuenta individual.*?Retiro\s+([\d,.]+)',
+        texto, re.DOTALL,
+    )
+    if m_retiro:
+        retiro = _parsear_monto(m_retiro.group(1)) or Decimal('0')
+
+    m_cesantia = re.search(
+        r'Cesant[ií]a en Edad Avanzada y Vejez\s+([\d,.]+)',
+        texto,
+    )
+    if m_cesantia:
+        cesantia_vejez = _parsear_monto(m_cesantia.group(1)) or Decimal('0')
+
+    # Subtotal cuenta individual
+    m_ci_subtotal = re.search(
+        r'Para abono en cuenta individual.*?S\s*U\s*B\s*T\s*O\s*T\s*A\s*L\s+([\d,.]+)',
+        texto, re.DOTALL,
+    )
+    if m_ci_subtotal:
+        total_cuenta_individual = _parsear_monto(m_ci_subtotal.group(1)) or Decimal('0')
+
+    # --- Seccion INFONAVIT ---
+    aportacion_sin_credito = Decimal('0')
+    aportacion_con_credito = Decimal('0')
+    amortizacion = Decimal('0')
+    total_infonavit = Decimal('0')
+
+    m_ap_sin = re.search(
+        r'Aportaci[oó]n Patronal sin cr[eé]dito\s+([\d,.]+)',
+        texto,
+    )
+    if m_ap_sin:
+        aportacion_sin_credito = _parsear_monto(m_ap_sin.group(1)) or Decimal('0')
+
+    m_ap_con = re.search(
+        r'Aportaci[oó]n Patronal con cr[eé]dito\s+([\d,.]+)',
+        texto,
+    )
+    if m_ap_con:
+        aportacion_con_credito = _parsear_monto(m_ap_con.group(1)) or Decimal('0')
+
+    m_amort = re.search(
+        r'Para abono en cuenta del INFONAVIT.*?Amortizaci[oó]n\s+([\d,.]+)',
+        texto, re.DOTALL,
+    )
+    if m_amort:
+        amortizacion = _parsear_monto(m_amort.group(1)) or Decimal('0')
+
+    # Subtotal INFONAVIT
+    m_inf_subtotal = re.search(
+        r'Para abono en cuenta del INFONAVIT.*?S\s*U\s*B\s*T\s*O\s*T\s*A\s*L\s+([\d,.]+)',
+        texto, re.DOTALL,
+    )
+    if m_inf_subtotal:
+        total_infonavit = _parsear_monto(m_inf_subtotal.group(1)) or Decimal('0')
+
+    # --- TOTAL A PAGAR ---
+    total_a_pagar = Decimal('0')
+    m_total = re.search(
+        r'T\s*O\s*T\s*A\s*L\s+A\s+P\s*A\s*G\s*A\s*R:\s*([\d,.]+)',
+        texto,
+    )
+    if m_total:
+        total_a_pagar = _parsear_monto(m_total.group(1)) or Decimal('0')
+    else:
+        advertencias.append("No se pudo extraer TOTAL A PAGAR")
+
+    # --- Validacion cruzada ---
+    suma_secciones = total_imss + total_cuenta_individual + total_infonavit
+    if total_a_pagar > 0 and suma_secciones != total_a_pagar:
+        advertencias.append(
+            f"Validacion cruzada fallo: IMSS({total_imss}) + "
+            f"CuentaInd({total_cuenta_individual}) + INFONAVIT({total_infonavit}) = "
+            f"{suma_secciones} != TOTAL({total_a_pagar})"
+        )
+
+    # --- Validar bimestral tiene montos ---
+    if incluye_infonavit:
+        if retiro == 0 and cesantia_vejez == 0:
+            advertencias.append("Bimestral pero Retiro y Cesantia son 0")
+        if aportacion_sin_credito == 0 and aportacion_con_credito == 0:
+            advertencias.append("Bimestral pero INFONAVIT aportaciones son 0")
+
+    # --- Confianza ---
+    confianza_100 = (
+        len(advertencias) == 0
+        and bool(periodo)
+        and bool(folio_sua)
+        and total_imss > 0
+        and total_a_pagar > 0
+    )
+
+    resultado = DatosIMSS(
+        periodo=periodo,
+        folio_sua=folio_sua,
+        total_imss=total_imss,
+        retiro=retiro,
+        cesantia_vejez=cesantia_vejez,
+        total_cuenta_individual=total_cuenta_individual,
+        aportacion_sin_credito=aportacion_sin_credito,
+        aportacion_con_credito=aportacion_con_credito,
+        amortizacion=amortizacion,
+        total_infonavit=total_infonavit,
+        total_a_pagar=total_a_pagar,
+        incluye_infonavit=incluye_infonavit,
+        confianza_100=confianza_100,
+        advertencias=advertencias,
+    )
+
+    logger.info(
+        "IMSS parseado: periodo={}, total=${:,.2f}, infonavit={}, confianza={}",
+        periodo, total_a_pagar, incluye_infonavit, confianza_100,
     )
 
     return resultado
