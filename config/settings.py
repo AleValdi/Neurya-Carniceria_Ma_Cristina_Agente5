@@ -46,6 +46,13 @@ CUENTAS_BANCARIAS: Dict[str, CuentaBancariaConfig] = {
         subcuenta_contable='070000',
         nombre='BANREGIO GASTOS',
     ),
+    'caja_chica': CuentaBancariaConfig(
+        banco='CAJA CHICA',
+        cuenta='00000000000',
+        cuenta_contable='1110',
+        subcuenta_contable='010000',
+        nombre='CAJA CHICA',
+    ),
 }
 
 # Mapeo inverso: numero de cuenta → clave
@@ -178,9 +185,81 @@ class CuentasContables:
 
     # Impuesto estatal
     NOMINAS_3_PCT = ('6200', '850000')
+    RVA_3_NOMINAS = ('2140', '220000')
+
+    # Retenciones federales pagadas
+    ISR_RET_HONORARIOS_PAGADO = ('2140', '330000')
+    ISR_RET_ARRENDAMIENTO_PAGADO = ('2140', '320000')
+    IVA_RETENIDO_PTE_PAGO = ('2140', '260000')
 
     # IMSS / INFONAVIT
     IMSS_GASTO = ('6200', '070000')              # I.M.S.S. (gasto patronal)
     APORTACION_2PCT_SAR = ('6200', '028000')     # Aportacion 2% S.A.R. (Retiro)
     CESANTIA_VEJEZ = ('6200', '360000')          # Cesantia y Vejez
     INFONAVIT_5PCT = ('6200', '050000')          # 5% INFONAVIT
+
+
+# Mapeo Cuenta+SubCuenta → Nombre (de SAVCuenta en produccion)
+# Usado por poliza.py para poblar el campo Nombre en SAVPoliza.
+NOMBRES_CUENTAS: Dict[tuple, str] = {
+    # Caja
+    ('1110', '010000'): 'CAJA CHICA',
+    # Bancos
+    ('1120', '040000'): 'BANREGIO F',
+    ('1120', '060000'): 'BANREGIO T',
+    ('1120', '070000'): 'BANREGIO GASTOS',
+    ('1120', '080000'): 'BANREGIO EMPRESARIAL 5164',
+    # Clientes
+    ('1210', '010000'): 'CLIENTES GLOBAL',
+    # IVA acreditable
+    ('1240', '010000'): 'IVA ACREDITABLE AL 16% PTE PAGO',
+    ('1246', '010000'): 'IVA ACREDITABLE PAGADO',
+    ('1246', '020000'): 'IEPS ACREDITABLE PAGADO',
+    # ISR provisional / IVA a favor
+    ('1245', '010000'): 'PAGO PROVISIONAL DE I.S.R.',
+    ('1247', '010000'): 'IVA A FAVOR',
+    # Proveedores
+    ('2110', '010000'): 'PROVEEDORES GLOBAL',
+    # Acreedores
+    ('2120', '020000'): 'ACREEDORES DIVERSOS BANREGIO',
+    ('2120', '040000'): 'ACREEDORES DIVERSOS NOMINA',
+    # Retenciones / impuestos por pagar
+    ('2140', '010000'): 'RETENCION I.M.S.S.',
+    ('2140', '020000'): 'RETENCION I.S.P.T.',
+    ('2140', '030000'): 'RVA PARA PAGO DE IMSS',
+    ('2140', '040000'): 'RVA. 5% INFONAVIT',
+    ('2140', '070000'): 'RET ISR HONORARIOS',
+    ('2140', '130000'): 'RVA.P PAGO 2% SAR',
+    ('2140', '140000'): 'RET 10% ISR ARREND PTE PAGO',
+    ('2140', '200000'): 'RVA.PARA CESANTIA Y VEJEZ',
+    ('2140', '220000'): 'RVA. 3% S/NOMINAS',
+    ('2140', '230000'): 'RVA. P. IVA PAGADO',
+    ('2140', '260000'): 'IVA RETENIDO PTE PAGO',
+    ('2140', '270000'): 'RETENCION INFONAVIT',
+    ('2140', '290000'): 'IVA RETENIDO PAGADO',
+    ('2140', '320000'): 'RET 10% ISR ARREND PAGADO',
+    ('2140', '330000'): 'RET ISR HONORARIOS PAGADO',
+    # IVA/IEPS trasladados (ventas)
+    ('2141', '010000'): 'IVA ACUMULABRE COBRADO',
+    ('2141', '020000'): 'IEPS ACUMULABLE COBRADO',
+    ('2146', '010000'): 'IVA ACUMULABLE AL 16% PTE COBRO',
+    ('2146', '020000'): 'IEPS ACUMULABLE AL 8% PTE COBRO',
+    # Gastos de venta (nomina, impuestos)
+    ('6200', '010000'): 'SUELDOS Y SALARIOS',
+    ('6200', '020000'): 'VACACIONES',
+    ('6200', '028000'): 'APORTACION 2% S.A.R.',
+    ('6200', '030000'): 'AGUINALDOS',
+    ('6200', '050000'): '5% INFONAVIT',
+    ('6200', '060000'): 'PRIMA VACACIONAL',
+    ('6200', '070000'): 'I.M.S.S.',
+    ('6200', '240000'): 'SEPTIMO DIA',
+    ('6200', '260000'): 'GRATIFICACIONES',
+    ('6200', '270000'): 'INDEMNIZACIONES',
+    ('6200', '300000'): 'RECARGOS',
+    ('6200', '360000'): 'CESANTIA Y VEJEZ',
+    ('6200', '370000'): 'COMISIONES BANCARIAS',
+    ('6200', '670000'): 'PRIMA DOMINICAL',
+    ('6200', '770000'): 'BONO DE PUNTUALIDAD',
+    ('6200', '780000'): 'BONO DE ASISTENCIA',
+    ('6200', '850000'): '3% NOMINAS',
+}

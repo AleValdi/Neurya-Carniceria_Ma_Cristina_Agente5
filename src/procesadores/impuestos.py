@@ -98,7 +98,7 @@ class ProcesadorImpuestos:
 
         # --- Federal ---
         if federales:
-            self._procesar_federal(plan, federales, fecha, datos_federal)
+            self._procesar_federal(plan, federales, fecha, datos_federal, cursor)
 
         # --- Estatal ---
         if estatales:
@@ -116,6 +116,7 @@ class ProcesadorImpuestos:
         movimientos: List[MovimientoBancario],
         fecha: date,
         datos: Optional[DatosImpuestoFederal],
+        cursor=None,
     ):
         """Genera movimientos y polizas para impuestos federales."""
         if datos is None:
@@ -138,6 +139,7 @@ class ProcesadorImpuestos:
         mov_1a = None  # total_primera
         mov_2a_principal = None  # ISR PM + ISR sal
         movs_2a_ret = []  # retenciones IVA por proveedor
+        fallback_2a = False  # True si el banco tiene 1 linea por total_segunda
 
         monto_2a_principal = datos.isr_personas_morales + datos.isr_ret_salarios
         montos_ret = {r.monto: r for r in datos.retenciones_iva}
@@ -151,8 +153,9 @@ class ProcesadorImpuestos:
             elif monto in montos_ret:
                 movs_2a_ret.append((mov, montos_ret[monto]))
             elif monto == datos.total_segunda and mov_2a_principal is None:
-                # Fallback: total 2a como movimiento principal
+                # Fallback: banco paga total 2a en una sola transferencia
                 mov_2a_principal = mov
+                fallback_2a = True
 
         # --- A. Federal 1a: Retenciones + IEPS ---
         if mov_1a:
@@ -184,20 +187,97 @@ class ProcesadorImpuestos:
             )
 
         # Retenciones IVA por proveedor
-        for mov, retencion in movs_2a_ret:
-            self._generar_federal_2a_retencion(plan, fecha, retencion, periodo)
-            plan.validaciones.append(
-                f"Federal 2a retencion: {retencion.nombre} ${retencion.monto:,.0f}"
+        if fallback_2a and not movs_2a_ret and datos.retenciones_iva:
+            # Banco pago todo en 1 transferencia — generar retenciones sin
+            # movimientos bancarios individuales (sub-movimientos del total)
+            for retencion in datos.retenciones_iva:
+                self._generar_federal_2a_retencion(plan, fecha, retencion, periodo)
+                plan.validaciones.append(
+                    f"Federal 2a retencion (sub-mov): {retencion.nombre} "
+                    f"${retencion.monto:,.0f}"
+                )
+        else:
+            for mov, retencion in movs_2a_ret:
+                self._generar_federal_2a_retencion(plan, fecha, retencion, periodo)
+                plan.validaciones.append(
+                    f"Federal 2a retencion: {retencion.nombre} ${retencion.monto:,.0f}"
+                )
+
+            # Verificar que todas las retenciones fueron matcheadas
+            montos_matcheados = {r.monto for _, r in movs_2a_ret}
+            for ret in datos.retenciones_iva:
+                if ret.monto not in montos_matcheados:
+                    plan.advertencias.append(
+                        f"Retencion IVA {ret.nombre} (${ret.monto:,.0f}) "
+                        f"sin movimiento bancario"
+                    )
+
+        # Validacion cruzada: retenciones IVA del PDF vs balanza contable
+        if datos.retenciones_iva and cursor:
+            self._validar_retenciones_vs_balanza(
+                plan, datos, fecha, cursor,
             )
 
-        # Verificar que todas las retenciones fueron matcheadas
-        montos_matcheados = {r.monto for _, r in movs_2a_ret}
-        for ret in datos.retenciones_iva:
-            if ret.monto not in montos_matcheados:
+    def _validar_retenciones_vs_balanza(
+        self,
+        plan: PlanEjecucion,
+        datos: DatosImpuestoFederal,
+        fecha: date,
+        cursor,
+    ):
+        """Valida retenciones IVA del PDF contra saldo en contabilidad.
+
+        Compara la suma de retenciones del acuse vs los Abonos acumulados
+        en 2140/260000 (IVA Retenido Pte Pago) del mes anterior.
+        """
+        # Mes M-1 (las retenciones se acumularon el mes antes del pago)
+        mes_m1 = fecha.month - 1
+        anio_m1 = fecha.year
+        if mes_m1 <= 0:
+            mes_m1 += 12
+            anio_m1 -= 1
+
+        col = f"{_MESES_BALANZA[mes_m1]}Abonos"
+
+        try:
+            # Usar PROD para balanza (datos de referencia, no afectados por sandbox)
+            cursor.execute(
+                f"SELECT {col} FROM DBSAV71.dbo.SAVContabSaldoS "
+                "WHERE Cuenta = '2140' AND SubCuenta = '260000' "
+                "AND PeriodoAge = ?",
+                (anio_m1,),
+            )
+            row = cursor.fetchone()
+            if not row or not row[0]:
                 plan.advertencias.append(
-                    f"Retencion IVA {ret.nombre} (${ret.monto:,.0f}) "
-                    f"sin movimiento bancario"
+                    "Sin saldo en 2140/260000 para validar retenciones IVA"
                 )
+                return
+
+            balanza_total = Decimal(str(row[0]))
+            pdf_total = sum(r.monto for r in datos.retenciones_iva)
+
+            diferencia = abs(balanza_total - pdf_total)
+            if diferencia <= Decimal('1.00'):
+                plan.validaciones.append(
+                    f"Retenciones IVA OK: PDF ${pdf_total:,.2f} "
+                    f"≈ Balanza 2140/260000 ${balanza_total:,.2f}"
+                )
+            elif diferencia <= Decimal('10.00'):
+                # Diferencias pequenas por redondeo en pagos a proveedores
+                plan.validaciones.append(
+                    f"Retenciones IVA: PDF ${pdf_total:,.2f} "
+                    f"vs Balanza 2140/260000 ${balanza_total:,.2f} "
+                    f"(dif ${diferencia:,.2f} — redondeo aceptable)"
+                )
+            else:
+                plan.advertencias.append(
+                    f"DISCREPANCIA retenciones IVA: PDF ${pdf_total:,.2f} "
+                    f"vs Balanza 2140/260000 ${balanza_total:,.2f} "
+                    f"(dif ${diferencia:,.2f})"
+                )
+        except Exception as e:
+            logger.warning("No se pudo validar retenciones IVA vs balanza: {}", e)
 
     def _generar_federal_1a(
         self,

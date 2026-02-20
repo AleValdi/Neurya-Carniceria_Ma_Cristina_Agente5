@@ -23,7 +23,7 @@ Caracteristicas:
 """
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -193,18 +193,24 @@ def _sumar_comisiones(
 ) -> Tuple[Decimal, Decimal]:
     """Suma comisiones separando base e IVA.
 
+    El IVA se calcula como 16% del subtotal agregado (no sumando lineas
+    IVA individuales del banco). Esto matchea la forma en que el ERP
+    lo registra en produccion y evita discrepancias de $0.01 por
+    diferencias de redondeo linea-por-linea vs agregado.
+
     Returns:
         (subtotal_base, total_iva)
     """
     tipos_base = (TipoProceso.COMISION_SPEI, TipoProceso.COMISION_TDC)
-    tipos_iva = (TipoProceso.COMISION_SPEI_IVA, TipoProceso.COMISION_TDC_IVA)
 
+    centavos = Decimal('0.01')
     subtotal = sum(
-        m.monto for m in movimientos if m.tipo_proceso in tipos_base
-    )
-    iva = sum(
-        m.monto for m in movimientos if m.tipo_proceso in tipos_iva
-    )
+        (m.monto for m in movimientos if m.tipo_proceso in tipos_base),
+        Decimal('0'),
+    ).quantize(centavos, rounding=ROUND_HALF_UP)
+
+    # IVA calculado sobre subtotal agregado (16%), no sumando lineas IVA
+    iva = (subtotal * Decimal('0.16')).quantize(centavos, rounding=ROUND_HALF_UP)
 
     return (subtotal, iva)
 

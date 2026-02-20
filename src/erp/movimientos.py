@@ -5,7 +5,7 @@ INSERT y consultas de movimientos en la tabla principal de bancos.
 
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Tuple
 
 from loguru import logger
 
@@ -126,3 +126,56 @@ def existe_movimiento(
 
     count = cursor.fetchone()[0]
     return count > 0
+
+
+def buscar_movimiento_existente(
+    cursor,
+    banco: str,
+    cuenta: str,
+    dia: int,
+    mes: int,
+    age: int,
+    monto: Decimal,
+    es_ingreso: bool,
+) -> Optional[Tuple[int, bool]]:
+    """Busca un movimiento existente por cuenta+fecha+monto+direccion.
+
+    Busca sin filtrar por concepto para encontrar registros manuales
+    que pudieran haberse ingresado con diferente redaccion.
+    Prioriza movimientos NO conciliados (candidatos para conciliar).
+
+    Args:
+        cursor: Cursor activo.
+        banco: Banco del movimiento.
+        cuenta: Cuenta bancaria.
+        dia, mes, age: Fecha del movimiento.
+        monto: Monto a buscar.
+        es_ingreso: True si es ingreso, False si es egreso.
+
+    Returns:
+        Tupla (Folio, ya_conciliado) si existe, None si no.
+    """
+    campo_monto = 'Ingreso' if es_ingreso else 'Egreso'
+    cursor.execute("""
+        SELECT TOP 1 Folio, Conciliada
+        FROM SAVCheqPM
+        WHERE Banco = ? AND Cuenta = ?
+          AND Age = ? AND Mes = ? AND Dia = ?
+          AND {} = ?
+        ORDER BY Conciliada ASC, FechaAlta ASC
+    """.format(campo_monto), (banco, cuenta, age, mes, dia, monto))
+
+    row = cursor.fetchone()
+    if row:
+        return (row[0], bool(row[1]))
+    return None
+
+
+def conciliar_movimiento(cursor, folio: int):
+    """Marca un movimiento existente como conciliado (Conciliada=1)."""
+    cursor.execute("""
+        UPDATE SAVCheqPM
+        SET Conciliada = 1
+        WHERE Folio = ? AND Conciliada = 0
+    """, (folio,))
+    logger.info("Conciliado movimiento existente: Folio={}", folio)

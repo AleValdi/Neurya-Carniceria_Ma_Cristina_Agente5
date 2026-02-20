@@ -8,6 +8,8 @@ de movimientos bancarios que hoy se hace manualmente en el ERP.
 **Cliente:** Distribuidora de Carnes Maria Cristina S.A. de C.V.
 **RFC:** DCM02072238A
 **ERP:** SAV7 (Asesoft)
+**Ejecucion:** Diaria — concilia el estado de cuenta del dia actual contra registros en ERP.
+Los movimientos que ya existen se marcan como conciliados; los que no, se crean automaticamente.
 
 ---
 
@@ -20,8 +22,10 @@ de movimientos bancarios que hoy se hace manualmente en el ERP.
 | 3. Mapa correlacion | ✅ Completada | Ver docs/MAPA_BD.md |
 | 3.5 Analisis de archivos de entrada | ✅ Completada | Ver seccion "Archivos de Entrada" |
 | 3.6 Verificacion contra produccion | ✅ Completada | Patrones verificados con datos reales feb 2026 |
-| 4. Diseno solucion | ⏳ **SIGUIENTE PASO** | — |
-| 5. Implementacion | ⏳ Pendiente | — |
+| 4. Diseno solucion | ✅ Completada | Procesadores + orquestador unificado |
+| 5. Implementacion | ✅ Completada | 245 tests, demo funcional Feb 3 |
+| 5.5 Comparacion vs produccion | ✅ Completada | Ver "Diferencias Conocidas vs Produccion" |
+| 6. Hardening / file watcher | ⏳ Pendiente | — |
 
 ---
 
@@ -290,25 +294,26 @@ BD: SAVCheqPM                     →  Movimientos ya creados por modulo Comerci
     → Match por monto + fecha     →  UPDATE Conciliada = 1
 ```
 
-### E2. Nomina
+### E2. Nomina → TRASPASO a CAJA CHICA
 ```
-Excel CONTPAQi (NOMINA XX CHEQUE.xlsx):
-    Hoja NOM 03:
-        Fila 73 (totales)         →  Percepciones y deducciones para poliza
-        Fila 74 (DISPERSION)      →  Monto transferencias
-        Fila 75 (CHEQUES)         →  Monto cheques
-        Fila 81 (vacaciones)      →  Monto vacaciones pagadas
-        Fila 84 (finiquito)       →  Monto finiquito
+IMPORTANTE: En el estado de cuenta, el movimiento "NOMINA" es realmente una
+transferencia de fondos de BANREGIO F a CAJA CHICA. La nomina real (percepciones,
+deducciones, poliza de 19 lineas) se procesa en AZTECA/VIRTUAL, que esta FUERA
+del estado de cuenta bancario.
 
-Estado de Cuenta                  →  Fecha y verificacion de monto
+Estado de Cuenta                  →  Monto de la transferencia
     + patron "NOMINA - PAGO DE NOMINA" → Identificar
     + dia del movimiento          →  Dia en SAVCheqPM
 
-→ Genera hasta 4 movimientos bancarios:
-    1. Dispersion: Tipo 2, NOMINA, poliza ~19 lineas (percepciones + deducciones)
-    2. Cheques: Tipo 2, NOMINA, poliza 2 lineas
-    3. Vacaciones: Tipo 2, NOMINA, poliza 2 lineas
-    4. Finiquito: Tipo 2, FINIQUITO, poliza 2 lineas
+→ Genera TRASPASO a CAJA CHICA (egreso BANREGIO F + ingreso CAJA CHICA):
+    - Tipo 2 (egreso) + Tipo 1 (ingreso)
+    - Clase: 'ENTRE CUENTAS PROPIA' (egreso) / 'TRASPASO' (ingreso)
+    - TipoEgreso: 'INTERBANCARIO'
+    - TipoPoliza: 'DIARIO', DocTipo: 'TRASPASOS'
+    - Poliza: 2 lineas (Cargo CAJA CHICA 1110/010000, Abono Banco 1120/040000)
+    - Egreso conciliada=1, ingreso conciliada=0
+
+El archivo Excel CONTPAQi (NOMINA XX CHEQUE.xlsx) NO se usa para este proceso.
 ```
 
 ---
@@ -365,7 +370,11 @@ para determinar cual es correcta.
 - **Cobros de clientes**: Se procesan desde modulo Comercial (Cobranza), NO desde Bancos
 - **Traspasos**: DocTipo=TRASPASOS en poliza (no CHEQUES), TipoPoliza=DIARIO
 - **Pagos a proveedores**: NO usan SAVCheqPMF, factura va en campo Concepto
-- **Nomina**: genera hasta 4 movimientos, poliza principal ~19 lineas
+- **Nomina**: En el estado de cuenta, "NOMINA" es realmente TRASPASO a CAJA CHICA (ver abajo)
+- **CAJA CHICA**: Cuenta interna intermediaria (Banco='CAJA CHICA', Cuenta='00000000000', CuentaC='1110/010000')
+- **SAVPoliza.Concepto**: varchar(60) — SIEMPRE truncar a 60 chars
+- **TipoEgreso traspasos**: 'INTERBANCARIO' (NO 'TRANSFERENCIA')
+- **COBRO_CLIENTE vs PAGO_PROVEEDOR**: Misma regex SPEI, se distinguen por direccion (ingreso vs egreso)
 
 ### Constantes
 | Campo | Valor |
@@ -382,6 +391,7 @@ para determinar cual es correcta.
 | Cuenta banco efectivo | BANREGIO / 055003730017 → contable 1120/040000 |
 | Cuenta banco tarjeta | BANREGIO / 038900320016 → contable 1120/060000 |
 | Cuenta banco gastos | BANREGIO / 055003730157 → contable 1120/070000 |
+| Cuenta CAJA CHICA | CAJA CHICA / 00000000000 → contable 1110/010000 |
 
 ### Secuencia SQL para insertar movimiento
 ```
@@ -452,14 +462,97 @@ Agente5/
 │       └── EJEMPLO DE LISTA DE RAYA.pdf
 ├── docs/                        # Documentacion generada
 │   └── MAPA_BD.md               # Correlacion pantalla↔BD (Fases 2-3)
-├── config/                      # Configuracion
-├── src/                         # Codigo de automatizacion
-│   ├── erp/                     # Logica de escritura al ERP
-│   └── entrada/                 # Lectura de datos de entrada
-├── tests/
+├── config/
+│   └── settings.py              # Cuentas bancarias, constantes ERP, cuentas contables
+├── src/
+│   ├── clasificador.py          # Patrones regex para clasificar movimientos
+│   ├── orquestador.py           # Funciones standalone + helpers (subset matching)
+│   ├── orquestador_unificado.py # Orquestacion principal (usa demo.py)
+│   ├── models.py                # Dataclasses: MovimientoBancario, PlanEjecucion, etc.
+│   ├── validacion.py            # Validaciones TDC/efectivo vs tesoreria
+│   ├── erp/                     # Escritura al ERP (INSERT/UPDATE)
+│   │   ├── consecutivos.py      # MAX(Folio)+1, MAX(Poliza)+1
+│   │   ├── movimientos.py       # INSERT/UPDATE SAVCheqPM
+│   │   ├── facturas_movimiento.py # INSERT SAVCheqPMF
+│   │   ├── compras.py           # INSERT SAVRecC/RecD (comisiones)
+│   │   └── poliza.py            # INSERT SAVPoliza (trunca concepto a 60 chars)
+│   ├── entrada/                 # Lectura de datos de entrada
+│   │   ├── estado_cuenta.py     # Parser estado de cuenta BANREGIO
+│   │   ├── tesoreria.py         # Parser reporte tesoreria (cortes de venta)
+│   │   ├── nomina.py            # Parser Excel CONTPAQi
+│   │   └── impuestos_pdf.py     # Parser PDFs impuestos
+│   ├── procesadores/            # Constructores de PlanEjecucion por tipo
+│   │   ├── venta_tdc.py         # I1: Venta TDC/TDD
+│   │   ├── venta_efectivo.py    # I2: Venta efectivo
+│   │   ├── comisiones.py        # E3: Comisiones bancarias
+│   │   ├── traspasos.py         # E4: Traspasos entre cuentas
+│   │   ├── conciliacion_pagos.py # E1: Conciliacion pagos proveedor
+│   │   ├── conciliacion_cobros.py # I3: Conciliacion cobros clientes
+│   │   ├── nomina_proc.py       # E2: (legacy, ya no se usa directamente)
+│   │   └── impuestos.py         # E5: Impuestos federales/estatales/IMSS
+│   └── reports/
+│       └── reporte_demo.py      # Genera Excel con comparacion vs produccion
+├── demo.py                      # Entry point: --limpiar, --solo-fecha, --dry-run
+├── tests/                       # 245 tests unitarios + 2 e2e
 ├── data/
-│   └── reportes/                # Archivos de entrada
+│   └── reportes/
 │       ├── PRUEBA.xlsx          # Estado de cuenta bancario (Feb 2026)
-│       └── FEBRERO INGRESOS 2026.xlsx  # Reporte tesoreria (Feb 2026)
+│       ├── FEBRERO INGRESOS 2026.xlsx  # Reporte tesoreria (Feb 2026)
+│       └── DEMO_REPORTE.xlsx    # Reporte generado (comparacion vs PROD)
 └── logs/
+```
+
+---
+
+## Diferencias Conocidas vs Produccion (Feb 3 2026)
+
+### TDC: Depositos combinados del banco
+El banco BANREGIO a veces combina multiples abonos TDC/TDD en una sola linea
+del estado de cuenta. En produccion, el operador los separa manualmente usando
+info adicional del banco (lotes de liquidacion).
+
+Ejemplo Feb 3 (19 depositos en cuenta tarjeta):
+| Deposito banco | PROD lo separa en |
+|---|---|
+| $56,137.11 | $23,508.01 (VENTA corte 1) + $32,629.10 (VENTA corte 2) |
+| $229,526.52 | $215,370.52 (VENTA corte 1) + $14,156.00 (TRASPASO) |
+| $277,313.16 | $271,901.87 (TRASPASO) + $5,411.29 (TRASPASO) |
+
+**Algoritmo**: `_asignar_multi_corte()` usa backtracking simultaneo con tolerancia
+escalonada en 3 niveles:
+1. Exacto para todos ($1)
+2. Exacto para corte 1, relajado ($500) para los demas
+3. Relajado para todos ($500)
+
+**Resultado Feb 3**: Corte 1 = 4 deps EXACTO ($334,082.48), Corte 2 = 3 deps
+($238,868.78, diff $245.69). Total: 7 VENTA + 12 TRASPASO (PROD: 10 + 12).
+TRASPASO count matchea PROD exactamente. VENTA diff = 3 items (depositos combinados).
+
+### Comisiones: IVA agregado vs por linea (RESUELTO)
+El banco calcula IVA por linea individual y suma, pero el ERP calcula IVA como
+16% del subtotal agregado. Para matchear PROD, usamos IVA calculado:
+`iva = (subtotal * 0.16).quantize('0.01', ROUND_HALF_UP)`
+**Resultado**: $11,236.83 = PROD exacto (antes $11,236.82, diff $0.01).
+
+### Direccion de traspasos CAJA CHICA
+| Caso | Direccion | Egreso conciliada | Ingreso conciliada |
+|------|-----------|-------------------|-------------------|
+| TDC sobrantes | CAJA CHICA → tarjeta (`desde_caja_chica=True`) | 0 | 1 |
+| Nomina | BANREGIO F → CAJA CHICA (`desde_caja_chica=False`) | 1 | 0 |
+
+### Tesoreria: detalle TDC por terminal
+Cada celda TDC en tesoreria (H50:H62) es formula `=X+Y` con 2 sumandos literales.
+Dia 1 tiene 7 filas, Dia 2 tiene 4 filas. Los sumandos NO mapean 1:1 a depositos
+bancarios (el banco agrega por lote de liquidacion, no por terminal).
+
+### Demo: como ejecutar y comparar
+```bash
+# Limpiar sandbox y procesar solo Feb 3
+source venv/bin/activate
+python demo.py --limpiar --solo-fecha 2026-02-03
+
+# Resultado: genera DEMO_REPORTE.xlsx
+# Feb 3: 63 INSERT, 37 folios, 0 errores
+# Comisiones: $11,236.83 (match PROD exacto)
+# TDC: 7 VENTA + 12 TRASPASO (PROD: 10 + 12)
 ```

@@ -9,6 +9,7 @@ from typing import List
 
 from loguru import logger
 
+from config.settings import NOMBRES_CUENTAS
 from src.models import LineaPoliza
 
 
@@ -40,11 +41,16 @@ def insertar_poliza(
     hora_alta = datetime(1899, 12, 30, ahora.hour, ahora.minute, ahora.second)
 
     for linea in lineas:
+        # Resolver nombre de cuenta: usar el de la linea, o buscar en catalogo
+        nombre = linea.nombre or NOMBRES_CUENTAS.get(
+            (linea.cuenta, linea.subcuenta), ''
+        )
+
         cursor.execute("""
             INSERT INTO SAVPoliza (
                 Cia, Fuente, Poliza, Oficina,
                 DocTipo, Movimiento,
-                CuentaOficina, Cuenta, SubCuenta,
+                CuentaOficina, Cuenta, SubCuenta, Nombre,
                 TipoCA, Cargo, Abono,
                 Concepto, DocFolio,
                 TipoPoliza, DocFecha,
@@ -54,7 +60,7 @@ def insertar_poliza(
             ) VALUES (
                 ?, ?, ?, ?,
                 ?, ?,
-                ?, ?, ?,
+                ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?,
                 ?, ?,
@@ -72,10 +78,11 @@ def insertar_poliza(
             oficina,  # CuentaOficina = Oficina
             linea.cuenta,
             linea.subcuenta,
+            nombre,
             linea.tipo_ca.value,
             linea.cargo,
             linea.abono,
-            linea.concepto,
+            linea.concepto[:60],
             folio,
             tipo_poliza,
             fecha,

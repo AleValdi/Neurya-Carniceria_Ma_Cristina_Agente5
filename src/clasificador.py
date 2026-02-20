@@ -11,100 +11,101 @@ from typing import Dict, List, Optional, Tuple
 
 from loguru import logger
 
+from config.settings import CUENTA_POR_NUMERO
 from src.models import MovimientoBancario, TipoProceso
 
 
-# Patrones de clasificacion: (regex_compilado, tipo_proceso, cuenta_filtro)
+# Patrones de clasificacion: (regex, tipo_proceso, cuenta_filtro, es_ingreso)
 # cuenta_filtro: si es None, aplica a cualquier cuenta.
+# es_ingreso: None=sin filtro, True=solo ingresos, False=solo egresos.
 # Se evaluan en orden; el primero que matchea gana.
-PATRONES: List[Tuple[re.Pattern, TipoProceso, Optional[str]]] = [
+PATRONES: List[Tuple[re.Pattern, TipoProceso, Optional[str], Optional[bool]]] = [
     # --- Ingresos venta tarjeta (cuenta tarjeta) ---
     (
         re.compile(r'ABONO VENTAS TDC', re.IGNORECASE),
         TipoProceso.VENTA_TDC,
-        '038900320016',
+        '038900320016', None,
     ),
     (
         re.compile(r'ABONO VENTAS TDD', re.IGNORECASE),
         TipoProceso.VENTA_TDD,
-        '038900320016',
+        '038900320016', None,
     ),
 
     # --- Ingresos venta efectivo (cuenta cheques) ---
     (
         re.compile(r'Dep[oó]sito en efectivo', re.IGNORECASE),
         TipoProceso.VENTA_EFECTIVO,
-        '055003730017',
+        '055003730017', None,
     ),
 
     # --- Traspasos ---
-    (
-        re.compile(r'\(BE\)\s*Traspaso a cuenta', re.IGNORECASE),
-        TipoProceso.TRASPASO,
-        None,
-    ),
-    (
-        re.compile(r'\(NB\)\s*Recepci[oó]n de cuenta', re.IGNORECASE),
-        TipoProceso.TRASPASO_INGRESO,
-        None,
-    ),
+    # NOTA: "(BE) Traspaso a cuenta" y "(NB) Recepcion de cuenta" se manejan
+    # en _clasificar_uno() porque requieren extraer la cuenta del texto y
+    # verificar si es propia (TRASPASO) o ajena (PAGO_PROVEEDOR / COBRO_CLIENTE).
 
     # --- Comisiones bancarias (IVA ANTES que base para evitar match parcial) ---
     (
         re.compile(r'IVA de Comisi[oó]n Transfer', re.IGNORECASE),
         TipoProceso.COMISION_SPEI_IVA,
-        None,
+        None, None,
     ),
     (
         re.compile(r'Comisi[oó]n Transferencia', re.IGNORECASE),
         TipoProceso.COMISION_SPEI,
-        None,
+        None, None,
     ),
     (
         re.compile(r'IVA Aplicaci[oó]n de Tasas', re.IGNORECASE),
         TipoProceso.COMISION_TDC_IVA,
-        '038900320016',
+        '038900320016', None,
     ),
     (
         re.compile(r'Aplicaci[oó]n de Tasas de Descuento', re.IGNORECASE),
         TipoProceso.COMISION_TDC,
-        '038900320016',
+        '038900320016', None,
     ),
 
     # --- Nomina ---
     (
         re.compile(r'NOMINA.*PAGO DE NOMINA', re.IGNORECASE),
         TipoProceso.NOMINA,
-        None,
+        None, None,
     ),
 
     # --- Impuestos federales (pago referenciado SAT) ---
     (
         re.compile(r'\(BE\)\s*Pago servicio.*PAGO REFERENCIADO', re.IGNORECASE),
         TipoProceso.IMPUESTO_FEDERAL,
-        '055003730017',
+        '055003730017', None,
     ),
 
     # --- Impuesto estatal (SPEI a Secretaria de Finanzas NL) ---
     (
         re.compile(r'SECRETARIA DE FINANZAS', re.IGNORECASE),
         TipoProceso.IMPUESTO_ESTATAL,
-        None,
+        None, None,
     ),
 
     # --- IMSS/INFONAVIT (pago SUA/SIPARE) ---
     (
         re.compile(r'\(BE\)\s*Pago servicio.*PAGO SUA', re.IGNORECASE),
         TipoProceso.IMPUESTO_IMSS,
-        '055003730017',
+        '055003730017', None,
     ),
 
-    # --- Pagos SPEI a proveedores (ultimo recurso para egresos) ---
-    # Patron: cadena alfanumerica seguida de SPEI
+    # --- Cobros SPEI de clientes (ingresos en cuenta cheques) ---
+    (
+        re.compile(r'[A-Z0-9]{5,}.*SPEI', re.IGNORECASE),
+        TipoProceso.COBRO_CLIENTE,
+        '055003730017', True,
+    ),
+
+    # --- Pagos SPEI a proveedores (egresos en cuenta cheques) ---
     (
         re.compile(r'[A-Z0-9]{5,}.*SPEI', re.IGNORECASE),
         TipoProceso.PAGO_PROVEEDOR,
-        '055003730017',
+        '055003730017', False,
     ),
 ]
 
@@ -131,12 +132,65 @@ def clasificar_movimientos(
     return movimientos
 
 
+_RE_TRASPASO_EGRESO = re.compile(
+    r'\(BE\)\s*Traspaso a cuenta:\s*(\d+)', re.IGNORECASE,
+)
+_RE_RECEPCION = re.compile(
+    r'\(NB\)\s*Recepci[oó]n de cuenta:\s*(\d+)', re.IGNORECASE,
+)
+
+
+def _es_cuenta_propia(numero: str) -> bool:
+    """Verifica si un numero de cuenta o CLABE corresponde a cuenta propia.
+
+    Soporta numero de cuenta directo (12 digitos) o CLABE (18 digitos).
+    En CLABE, la cuenta esta en posiciones 6-17 (11 digitos, sin leading zero).
+    """
+    if numero in CUENTA_POR_NUMERO:
+        return True
+    # CLABE: 3 banco + 3 sucursal + 11 cuenta + 1 verificador = 18 digitos
+    if len(numero) == 18:
+        cuenta_clabe = numero[6:17]
+        for cuenta_propia in CUENTA_POR_NUMERO:
+            # Cuenta propia sin leading zero == porcion CLABE
+            if cuenta_propia.lstrip('0') == cuenta_clabe.lstrip('0'):
+                return True
+    return False
+
+
 def _clasificar_uno(mov: MovimientoBancario) -> TipoProceso:
     """Clasifica un solo movimiento."""
-    for patron, tipo, cuenta_filtro in PATRONES:
+    # Caso especial: "(BE) Traspaso a cuenta: XXXXXXXXXXX"
+    # Si la cuenta destino es propia → TRASPASO (entre cuentas)
+    # Si la cuenta destino es ajena → PAGO_PROVEEDOR (solo conciliar)
+    m = _RE_TRASPASO_EGRESO.search(mov.descripcion)
+    if m:
+        cuenta_destino = m.group(1)
+        if _es_cuenta_propia(cuenta_destino):
+            return TipoProceso.TRASPASO
+        return TipoProceso.PAGO_PROVEEDOR
+
+    # Caso especial: "(NB) Recepcion de cuenta: XXXXXXXXXXX"
+    # Si la cuenta origen es propia → TRASPASO_INGRESO
+    # Si la cuenta origen es ajena → COBRO_CLIENTE
+    m = _RE_RECEPCION.search(mov.descripcion)
+    if m:
+        cuenta_origen = m.group(1)
+        if _es_cuenta_propia(cuenta_origen):
+            return TipoProceso.TRASPASO_INGRESO
+        return TipoProceso.COBRO_CLIENTE
+
+    for patron, tipo, cuenta_filtro, es_ingreso in PATRONES:
         # Filtrar por cuenta si aplica
         if cuenta_filtro and mov.cuenta_banco != cuenta_filtro:
             continue
+
+        # Filtrar por direccion (ingreso/egreso) si aplica
+        if es_ingreso is not None:
+            if es_ingreso and not mov.es_ingreso:
+                continue
+            if not es_ingreso and not mov.es_egreso:
+                continue
 
         if patron.search(mov.descripcion):
             return tipo

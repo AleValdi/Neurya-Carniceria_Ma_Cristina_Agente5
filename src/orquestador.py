@@ -19,17 +19,32 @@ from src.clasificador import (
 )
 from src.entrada.estado_cuenta import parsear_estado_cuenta_plano
 from src.entrada.tesoreria import parsear_tesoreria
+from src.erp.cobros import (
+    actualizar_factura_cobrada,
+    insertar_cobro_factcob,
+    obtener_siguiente_cobro,
+    obtener_siguiente_cobro_multiple,
+)
 from src.erp.compras import insertar_factura_compra
 from src.erp.consecutivos import obtener_siguiente_folio, obtener_siguiente_poliza
 from src.erp.facturas_movimiento import insertar_factura_movimiento
-from src.erp.movimientos import actualizar_num_poliza, existe_movimiento, insertar_movimiento
+from src.erp.movimientos import (
+    actualizar_num_poliza,
+    buscar_movimiento_existente,
+    conciliar_movimiento,
+    insertar_movimiento,
+)
 from src.erp.poliza import insertar_poliza
 from src.erp.sav7_connector import SAV7Connector
 from src.models import (
     CorteVentaDiaria,
+    DatosCobroCliente,
+    DatosMovimientoPM,
+    LineaPoliza,
     MovimientoBancario,
     PlanEjecucion,
     ResultadoProceso,
+    TipoCA,
     TipoProceso,
 )
 from src.entrada.impuestos_pdf import parsear_imss, parsear_impuesto_estatal, parsear_impuesto_federal
@@ -510,9 +525,12 @@ def procesar_conciliaciones(
             _mostrar_plan(plan)
 
             if dry_run:
+                tipo_dr = 'CONCILIACION_COBROS'
+                if plan.cobros_cliente:
+                    tipo_dr = 'COBRO_CLIENTE'
                 resultados.append(ResultadoProceso(
                     exito=True,
-                    tipo_proceso='CONCILIACION_COBROS',
+                    tipo_proceso=tipo_dr,
                     descripcion=f'DRY-RUN: {plan.descripcion}',
                     plan=plan,
                 ))
@@ -525,8 +543,13 @@ def procesar_conciliaciones(
                         continue
                     if resp == 'todos':
                         confirmar = False
-                resultado = _ejecutar_conciliacion(plan, db_connector)
-                resultados.append(resultado)
+                # Ejecutar conciliaciones (Fase B) y/o cobros (Fase A)
+                if plan.conciliaciones:
+                    resultado = _ejecutar_conciliacion(plan, db_connector)
+                    resultados.append(resultado)
+                if plan.cobros_cliente:
+                    resultado = _ejecutar_cobro_completo(plan, db_connector)
+                    resultados.append(resultado)
 
     if cursor:
         cursor.close()
@@ -799,8 +822,15 @@ def _buscar_cortes_tdc(
             candidata = fecha_deposito - timedelta(days=delta)
             if candidata in cortes:
                 resultado.append(cortes[candidata])
+    elif dia_semana == 1:
+        # Martes: si el banco no proceso el lunes (ej: festivo o demora),
+        # domingo(-2) y lunes(-1) se depositan juntos el martes
+        for delta in (2, 1):
+            candidata = fecha_deposito - timedelta(days=delta)
+            if candidata in cortes:
+                resultado.append(cortes[candidata])
     else:
-        # Otros dias: deposito del dia anterior
+        # Mie-Dom: deposito del dia anterior
         # Buscar dia-1, dia-2 (por si hubo festivo), mismo dia
         for delta in (1, 2, 0, 3):
             candidata = fecha_deposito - timedelta(days=delta)
@@ -994,12 +1024,94 @@ def _encontrar_subset_por_suma(
         return list(movimientos)
 
     # Para conjuntos pequenos, busqueda de subconjuntos por tamanio
-    # Empezar por subconjuntos mas grandes (mas probable match)
-    for size in range(n - 1, 0, -1):
+    # Empezar por subconjuntos chicos para dejar mas items a cortes siguientes
+    for size in range(1, n):
         resultado = _buscar_combinacion(movimientos, target, tolerancia, size)
         if resultado is not None:
             return resultado
 
+    return None
+
+
+def _asignar_multi_corte(
+    depositos: List[MovimientoBancario],
+    targets: List[Decimal],
+    tolerancia: Decimal = Decimal('1.00'),
+    tolerancias: Optional[List[Decimal]] = None,
+) -> Optional[List[List[MovimientoBancario]]]:
+    """Asigna depositos a multiples cortes simultaneamente.
+
+    A diferencia de _encontrar_subset_por_suma (greedy secuencial),
+    esta funcion usa backtracking: para cada target prueba todos los
+    subsets validos y verifica que los targets restantes se puedan
+    satisfacer con el remanente.
+
+    Args:
+        depositos: Lista de movimientos disponibles.
+        targets: Lista de montos objetivo (uno por corte, en orden).
+        tolerancia: Tolerancia uniforme en pesos para cada target.
+        tolerancias: Lista de tolerancias individuales (una por target).
+            Si se proporciona, tiene prioridad sobre tolerancia.
+
+    Returns:
+        Lista de subsets (uno por target) si existe solucion, None si no.
+    """
+    if not targets:
+        return []
+
+    from itertools import combinations
+
+    # Determinar tolerancia para este nivel y para los siguientes
+    if tolerancias:
+        tol_actual = tolerancias[0]
+        tols_restantes = tolerancias[1:] if len(tolerancias) > 1 else None
+    else:
+        tol_actual = tolerancia
+        tols_restantes = None
+
+    target = targets[0]
+    remaining_targets = targets[1:]
+    n = len(depositos)
+
+    # Optimizacion: si suma total coincide y es el ultimo target
+    suma_total = sum(m.monto for m in depositos)
+    if abs(suma_total - target) <= tol_actual and not remaining_targets:
+        return [list(depositos)]
+
+    logger.debug(
+        "Multi-corte: {} depositos, target=${:,.2f}, tol=${:,.2f}, "
+        "{} targets restantes",
+        n, target, tol_actual, len(remaining_targets),
+    )
+
+    hits = 0
+    for size in range(1, n):
+        for combo_idx in combinations(range(n), size):
+            suma = sum(depositos[i].monto for i in combo_idx)
+            if abs(suma - target) <= tol_actual:
+                hits += 1
+                subset = [depositos[i] for i in combo_idx]
+
+                if not remaining_targets:
+                    return [subset]
+
+                idx_set = set(combo_idx)
+                remainder = [
+                    depositos[i] for i in range(n) if i not in idx_set
+                ]
+
+                sub_result = _asignar_multi_corte(
+                    remainder, remaining_targets,
+                    tolerancia=tolerancia,
+                    tolerancias=tols_restantes,
+                )
+                if sub_result is not None:
+                    return [subset] + sub_result
+
+    logger.debug(
+        "Multi-corte: sin solucion (n={}, target=${:,.2f}, hits={})",
+        n, target, hits,
+    )
     return None
 
 
@@ -1013,7 +1125,7 @@ def _buscar_combinacion(
     from itertools import combinations
 
     # Limitar combinaciones para evitar explosion combinatoria
-    max_combos = 10000
+    max_combos = 500000
     count = 0
 
     for combo in combinations(movimientos, size):
@@ -1106,6 +1218,15 @@ def _mostrar_plan(plan: PlanEjecucion):
                 f"= ${compra.total:,.2f}"
             )
 
+    if plan.cobros_cliente:
+        print(f"\n  COBROS A CREAR ({len(plan.cobros_cliente)}):")
+        for cobro in plan.cobros_cliente:
+            print(
+                f"    {cobro.serie}-{cobro.num_fac} | "
+                f"${cobro.monto:,.2f} | Cliente {cobro.cliente} "
+                f"({cobro.cliente_nombre[:25]})"
+            )
+
     if plan.conciliaciones:
         print(f"\n  CONCILIACIONES ({len(plan.conciliaciones)}):")
         for conc in plan.conciliaciones:
@@ -1172,6 +1293,7 @@ def _ejecutar_plan(
     folios_creados = []
     num_poliza = None
     movimientos_saltados = 0
+    movimientos_conciliados = 0
 
     try:
         with connector.get_cursor(transaccion=True) as cursor:
@@ -1192,21 +1314,37 @@ def _ejecutar_plan(
                     else 6
                 )
 
-                # CHECK IDEMPOTENCIA: verificar si el movimiento ya existe
+                # CHECK: verificar si el movimiento ya existe en BD
                 monto_check = (
                     datos_pm.ingreso if datos_pm.ingreso > 0
                     else datos_pm.egreso
                 )
-                if existe_movimiento(
+                es_ingreso = datos_pm.ingreso > 0
+                existente = buscar_movimiento_existente(
                     cursor, datos_pm.banco, datos_pm.cuenta,
                     datos_pm.dia, datos_pm.mes, datos_pm.age,
-                    datos_pm.concepto, monto_check,
-                ):
-                    logger.warning(
-                        "Movimiento ya existe, saltando: {} ${:,.2f}",
-                        datos_pm.concepto[:50], monto_check,
-                    )
-                    movimientos_saltados += 1
+                    monto_check, es_ingreso,
+                )
+
+                if existente:
+                    folio_existente, ya_conciliado = existente
+                    if not ya_conciliado:
+                        # Registro existente (manual o de otro origen) → conciliar
+                        conciliar_movimiento(cursor, folio_existente)
+                        movimientos_conciliados += 1
+                        folios_creados.append(folio_existente)
+                        logger.info(
+                            "Movimiento existente conciliado: Folio={}, {} ${:,.2f}",
+                            folio_existente, datos_pm.concepto[:50], monto_check,
+                        )
+                    else:
+                        # Ya conciliado (duplicado de ejecucion anterior)
+                        movimientos_saltados += 1
+                        logger.warning(
+                            "Movimiento ya existe y conciliado (Folio={}), "
+                            "saltando: {} ${:,.2f}",
+                            folio_existente, datos_pm.concepto[:50], monto_check,
+                        )
                     # Avanzar indices sin insertar
                     factura_idx += n_facturas
                     linea_idx += n_lineas
@@ -1272,6 +1410,14 @@ def _ejecutar_plan(
                 )
 
         # Commit exitoso
+        if movimientos_conciliados > 0:
+            logger.info(
+                "{} movimientos existentes fueron conciliados",
+                movimientos_conciliados,
+            )
+            plan.validaciones.append(
+                f"{movimientos_conciliados} movimientos existentes conciliados"
+            )
         if movimientos_saltados > 0:
             logger.info(
                 "{} movimientos ya existian y fueron saltados",
@@ -1329,6 +1475,145 @@ def _ejecutar_conciliacion(
 
     except Exception as e:
         logger.error("Error ejecutando conciliacion: {}", e)
+        return ResultadoProceso(
+            exito=False,
+            tipo_proceso=plan.tipo_proceso,
+            descripcion=plan.descripcion,
+            error=str(e),
+            plan=plan,
+        )
+
+
+def _ejecutar_cobro_completo(
+    plan: PlanEjecucion,
+    connector: SAV7Connector,
+) -> ResultadoProceso:
+    """Ejecuta creacion de cobro completo (Fase A).
+
+    Afecta 4 tablas en una sola transaccion:
+    1. INSERT SAVFactCob (cobro del modulo Comercial)
+    2. UPDATE SAVFactC (Saldo, Estatus)
+    3. INSERT SAVCheqPM (movimiento bancario Tipo=1, Conciliada=1)
+    4. INSERT SAVPoliza (SAV7-COMERCIAL, 2 lineas, DocTipo='COBRO MULTIPLE')
+    5. UPDATE SAVCheqPM NumPoliza
+    """
+    folios = []
+
+    try:
+        with connector.get_cursor(transaccion=True) as cursor:
+            for cobro_data in plan.cobros_cliente:
+                # 1. Consecutivos
+                num_cobro = obtener_siguiente_cobro(cursor)
+                num_cobro_multiple = obtener_siguiente_cobro_multiple(cursor)
+                folio = obtener_siguiente_folio(cursor)
+                num_poliza = obtener_siguiente_poliza(
+                    cursor, fuente='SAV7-COMERCIAL',
+                )
+
+                # 2. INSERT SAVFactCob
+                insertar_cobro_factcob(
+                    cursor, cobro_data, num_cobro, num_cobro_multiple,
+                )
+
+                # 3. UPDATE SAVFactC (Saldo, Estatus)
+                actualizar_factura_cobrada(
+                    cursor, cobro_data.serie,
+                    cobro_data.num_fac, cobro_data.monto,
+                )
+
+                # 4. INSERT SAVCheqPM (Tipo=1, Clase=DEPOSITOS, Conciliada=1)
+                concepto = (
+                    f"CLIENTE: {cobro_data.cliente}-"
+                    f"{cobro_data.cliente_nombre[:15]} "
+                    f"CM: {num_cobro_multiple} "
+                    f"FACT: {cobro_data.serie}-{cobro_data.num_fac},"
+                )
+                datos_pm = DatosMovimientoPM(
+                    banco=cobro_data.banco,
+                    cuenta=cobro_data.cuenta_banco,
+                    age=cobro_data.fecha_cobro.year,
+                    mes=cobro_data.fecha_cobro.month,
+                    dia=cobro_data.fecha_cobro.day,
+                    tipo=1,
+                    ingreso=cobro_data.monto,
+                    egreso=Decimal('0'),
+                    concepto=concepto,
+                    clase='DEPOSITOS',
+                    fpago='Transferencia',
+                    tipo_egreso='NA',
+                    conciliada=1,
+                    paridad=Decimal('1.0000'),
+                    tipo_poliza='INGRESO',
+                    num_factura=f'CM: {num_cobro_multiple}',
+                )
+                insertar_movimiento(cursor, datos_pm, folio)
+                folios.append(folio)
+
+                # 5. INSERT SAVPoliza (SAV7-COMERCIAL, 2 lineas)
+                lineas = [
+                    LineaPoliza(
+                        movimiento=1,
+                        cuenta=cobro_data.cuenta_contable,
+                        subcuenta=cobro_data.subcuenta_contable,
+                        tipo_ca=TipoCA.CARGO,
+                        cargo=cobro_data.monto,
+                        abono=Decimal('0'),
+                        concepto=(
+                            f"Banco: {cobro_data.banco}. "
+                            f"CM: {num_cobro_multiple} "
+                            f"Fact: {cobro_data.serie}-{cobro_data.num_fac} "
+                            f"FPago: Transferenci"
+                        ),
+                        doc_tipo='COBRO MULTIPLE',
+                    ),
+                    LineaPoliza(
+                        movimiento=2,
+                        cuenta='1210',
+                        subcuenta='010000',
+                        tipo_ca=TipoCA.ABONO,
+                        cargo=Decimal('0'),
+                        abono=cobro_data.monto,
+                        concepto=(
+                            f"Cliente:{cobro_data.cliente} "
+                            f"Nombre:{cobro_data.cliente_nombre[:15]}  "
+                            f"CM: {num_cobro_multiple}"
+                        ),
+                        doc_tipo='COBRO MULTIPLE',
+                    ),
+                ]
+                insertar_poliza(
+                    cursor,
+                    num_poliza=num_poliza,
+                    lineas=lineas,
+                    folio=folio,
+                    fecha=datetime.combine(
+                        cobro_data.fecha_cobro, datetime.min.time(),
+                    ),
+                    tipo_poliza='INGRESO',
+                    concepto_encabezado=concepto,
+                    fuente='SAV7-COMERCIAL',
+                )
+
+                # 6. UPDATE SAVCheqPM NumPoliza
+                actualizar_num_poliza(cursor, folio, num_poliza)
+
+                logger.info(
+                    "Cobro creado: {}-{} ${:,.2f} | Cobro={}, CM={}, "
+                    "Folio={}, Poliza={}",
+                    cobro_data.serie, cobro_data.num_fac, cobro_data.monto,
+                    num_cobro, num_cobro_multiple, folio, num_poliza,
+                )
+
+        return ResultadoProceso(
+            exito=True,
+            tipo_proceso=plan.tipo_proceso,
+            descripcion=plan.descripcion,
+            folios=folios,
+            plan=plan,
+        )
+
+    except Exception as e:
+        logger.error("Error creando cobro: {}", e)
         return ResultadoProceso(
             exito=False,
             tipo_proceso=plan.tipo_proceso,

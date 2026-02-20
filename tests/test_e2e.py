@@ -277,6 +277,157 @@ def comparar_con_produccion(cursor, folio_sandbox: int, tipo: str) -> dict:
     }
 
 
+def buscar_folio_produccion(
+    cursor,
+    clase: str,
+    egreso: Decimal,
+    age: int = 2026,
+    mes: int = 2,
+    dia: Optional[int] = None,
+) -> Optional[int]:
+    """Busca folio en produccion por Clase (trimmed) y monto Egreso exacto."""
+    params = [clase, float(egreso), age, mes]
+    query = """
+        SELECT TOP 1 Folio
+        FROM DBSAV71.dbo.SAVCheqPM
+        WHERE RTRIM(Clase) = ? AND Egreso = ? AND Age = ? AND Mes = ?
+    """
+    if dia is not None:
+        query += " AND Dia = ?"
+        params.append(dia)
+    query += " ORDER BY Folio DESC"
+    cursor.execute(query, params)
+    row = cursor.fetchone()
+    return row[0] if row else None
+
+
+def comparar_movimiento_produccion(
+    cursor, folio_sandbox: int, folio_produccion: int,
+) -> dict:
+    """Compara movimiento sandbox vs produccion (formato + montos).
+
+    Similar a comparar_con_produccion pero compara montos y acepta
+    folio de produccion directo (en lugar de buscar por tipo).
+    """
+    sandbox = verificar_movimiento(cursor, folio_sandbox)
+    if not sandbox:
+        return {'error': f'Folio sandbox {folio_sandbox} no encontrado'}
+
+    cursor.execute("""
+        SELECT Folio, Banco, Cuenta, Age, Mes, Dia, Tipo,
+               Ingreso, Egreso, Concepto, Clase, FPago, TipoEgreso,
+               Conciliada, Paridad, ParidadDOF, Moneda,
+               Cia, Fuente, Oficina, CuentaOficina,
+               TipoPoliza, NumPoliza, Sucursal
+        FROM DBSAV71.dbo.SAVCheqPM
+        WHERE Folio = ?
+    """, (folio_produccion,))
+    row = cursor.fetchone()
+    if not row:
+        return {'error': f'Folio produccion {folio_produccion} no encontrado'}
+    cols = [desc[0] for desc in cursor.description]
+    prod = dict(zip(cols, row))
+
+    diferencias = {}
+
+    # Campos de formato (sin Capturo — produccion usa otro usuario)
+    campos = [
+        'Banco', 'Cuenta', 'Tipo', 'Moneda', 'Cia', 'Fuente',
+        'Oficina', 'CuentaOficina', 'TipoPoliza', 'Sucursal',
+        'TipoEgreso',
+    ]
+    for campo in campos:
+        if sandbox.get(campo) != prod.get(campo):
+            diferencias[campo] = {
+                'sandbox': sandbox[campo], 'produccion': prod[campo],
+            }
+
+    # Clase (strip trailing spaces de ambos)
+    clase_sb = (sandbox.get('Clase') or '').strip()
+    clase_pr = (prod.get('Clase') or '').strip()
+    if clase_sb != clase_pr:
+        diferencias['Clase'] = {'sandbox': clase_sb, 'produccion': clase_pr}
+
+    # Monto Egreso
+    egreso_sb = Decimal(str(sandbox['Egreso']))
+    egreso_pr = Decimal(str(prod['Egreso']))
+    if abs(egreso_sb - egreso_pr) > Decimal('0.01'):
+        diferencias['Egreso'] = {
+            'sandbox': str(egreso_sb), 'produccion': str(egreso_pr),
+        }
+
+    return {
+        'folio_sandbox': folio_sandbox,
+        'folio_produccion': folio_produccion,
+        'diferencias': diferencias,
+        'match_perfecto': len(diferencias) == 0,
+    }
+
+
+def comparar_poliza_produccion(
+    cursor,
+    folio_sandbox: int,
+    folio_produccion: int,
+    comparar_montos: bool = True,
+) -> dict:
+    """Compara poliza linea por linea entre sandbox y produccion.
+
+    Verifica: numero de lineas, Cuenta/SubCuenta, TipoCA.
+    Si comparar_montos=True, tambien verifica Cargo y Abono.
+    """
+    lineas_sb = verificar_poliza(cursor, folio_sandbox)
+
+    cursor.execute("""
+        SELECT Poliza, Movimiento, Cuenta, SubCuenta,
+               TipoCA, Cargo, Abono, Concepto,
+               DocTipo, TipoPoliza, DocFolio
+        FROM DBSAV71.dbo.SAVPoliza
+        WHERE Fuente = 'SAV7-CHEQUES' AND DocFolio = ?
+        ORDER BY Poliza, Movimiento
+    """, (folio_produccion,))
+    cols = [desc[0] for desc in cursor.description]
+    lineas_pr = [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    resultado = {
+        'lineas_sandbox': len(lineas_sb),
+        'lineas_produccion': len(lineas_pr),
+        'diferencias': [],
+    }
+
+    if len(lineas_sb) != len(lineas_pr):
+        resultado['diferencias'].append(
+            f"Diferente numero de lineas: sandbox={len(lineas_sb)}, "
+            f"produccion={len(lineas_pr)}"
+        )
+        resultado['match_perfecto'] = False
+        return resultado
+
+    for i, (ls, lp) in enumerate(zip(lineas_sb, lineas_pr)):
+        diffs = {}
+        if ls['Cuenta'] != lp['Cuenta']:
+            diffs['Cuenta'] = {'sb': ls['Cuenta'], 'pr': lp['Cuenta']}
+        if ls['SubCuenta'] != lp['SubCuenta']:
+            diffs['SubCuenta'] = {'sb': ls['SubCuenta'], 'pr': lp['SubCuenta']}
+        if ls['TipoCA'] != lp['TipoCA']:
+            diffs['TipoCA'] = {'sb': ls['TipoCA'], 'pr': lp['TipoCA']}
+
+        if comparar_montos:
+            cargo_sb = Decimal(str(ls['Cargo']))
+            cargo_pr = Decimal(str(lp['Cargo']))
+            abono_sb = Decimal(str(ls['Abono']))
+            abono_pr = Decimal(str(lp['Abono']))
+            if abs(cargo_sb - cargo_pr) > Decimal('0.01'):
+                diffs['Cargo'] = {'sb': str(cargo_sb), 'pr': str(cargo_pr)}
+            if abs(abono_sb - abono_pr) > Decimal('0.01'):
+                diffs['Abono'] = {'sb': str(abono_sb), 'pr': str(abono_pr)}
+
+        if diffs:
+            resultado['diferencias'].append(f"Linea {i+1}: {diffs}")
+
+    resultado['match_perfecto'] = len(resultado['diferencias']) == 0
+    return resultado
+
+
 # ---------------------------------------------------------------------------
 # Tests E2E
 # ---------------------------------------------------------------------------
@@ -731,6 +882,65 @@ class TestE2ENomina:
                             f"Poliza secundaria debe tener 2 lineas, tiene {len(lineas)}"
                         )
 
+            # --- Comparar formato con produccion (sin montos ni poliza) ---
+            cursor_lectura = connector.db.conectar().cursor()
+            for resultado in exitosos:
+                for folio in resultado.folios:
+                    mov = verificar_movimiento(cursor_lectura, folio)
+                    clase = (mov['Clase'] or '').strip()
+                    tipo_egreso = (mov['TipoEgreso'] or '').strip()
+
+                    # Buscar registro de produccion con misma clase y tipo egreso
+                    cursor_lectura.execute("""
+                        SELECT TOP 1 Folio
+                        FROM DBSAV71.dbo.SAVCheqPM
+                        WHERE RTRIM(Clase) = ? AND TipoEgreso = ?
+                          AND Tipo = 2 AND Age = 2026 AND Mes = 2
+                        ORDER BY Folio DESC
+                    """, (clase, tipo_egreso))
+                    row = cursor_lectura.fetchone()
+                    if not row:
+                        continue  # Skip si no hay match en produccion
+
+                    folio_prod = row[0]
+                    comp = comparar_movimiento_produccion(
+                        cursor_lectura, folio, folio_prod
+                    )
+                    # Solo verificar formato, ignorar Egreso (montos distintos)
+                    diffs = comp.get('diferencias', {})
+                    diffs_formato = {
+                        k: v for k, v in diffs.items() if k != 'Egreso'
+                    }
+                    assert not diffs_formato, (
+                        f"Diferencias formato nomina (folio {folio}) vs "
+                        f"produccion (folio {folio_prod}): {diffs_formato}"
+                    )
+
+                    # Verificar que cuentas de poliza existen en produccion
+                    lineas_sb = verificar_poliza(cursor_lectura, folio)
+                    if lineas_sb and tipo_egreso == 'TRANSFERENCIA':
+                        cuentas_sb = {
+                            (l['Cuenta'], l['SubCuenta']) for l in lineas_sb
+                        }
+                        cursor_lectura.execute("""
+                            SELECT DISTINCT p.Cuenta, p.SubCuenta
+                            FROM DBSAV71.dbo.SAVPoliza p
+                            JOIN DBSAV71.dbo.SAVCheqPM m
+                              ON p.DocFolio = m.Folio
+                            WHERE p.Fuente = 'SAV7-CHEQUES'
+                              AND RTRIM(m.Clase) = 'NOMINA'
+                              AND m.TipoEgreso = 'TRANSFERENCIA'
+                              AND m.Age = 2026 AND m.Mes = 2
+                        """)
+                        cuentas_prod = {
+                            (r[0], r[1]) for r in cursor_lectura.fetchall()
+                        }
+                        cuentas_nuevas = cuentas_sb - cuentas_prod
+                        assert not cuentas_nuevas, (
+                            f"Cuentas de poliza no encontradas en nomina "
+                            f"de produccion: {cuentas_nuevas}"
+                        )
+
         finally:
             with connector.get_cursor(transaccion=True) as cursor:
                 for resultado in resultados:
@@ -836,6 +1046,28 @@ class TestE2EIMSS:
             facts = verificar_facturas_pmf(cursor_lectura, folio)
             assert len(facts) == 0, "IMSS no debe tener SAVCheqPMF"
 
+            # --- Comparar con produccion (montos + poliza) ---
+            folio_prod = buscar_folio_produccion(
+                cursor_lectura, 'PAGO IMSS', Decimal('93880.17'), 2026, 2, 9
+            )
+            if folio_prod:
+                comp_mov = comparar_movimiento_produccion(
+                    cursor_lectura, folio, folio_prod
+                )
+                assert comp_mov.get('match_perfecto', False), (
+                    f"Diferencias movimiento IMSS vs produccion: "
+                    f"{comp_mov.get('diferencias')}"
+                )
+                comp_pol = comparar_poliza_produccion(
+                    cursor_lectura, folio, folio_prod
+                )
+                assert comp_pol.get('match_perfecto', False), (
+                    f"Diferencias poliza IMSS vs produccion: "
+                    f"{comp_pol.get('diferencias')}"
+                )
+            else:
+                pytest.skip("Sin registro IMSS en produccion para comparar")
+
         finally:
             with connector.get_cursor(transaccion=True) as cursor:
                 for resultado in resultados:
@@ -929,6 +1161,45 @@ class TestE2EImpuestos:
             # Deben estar los 3 montos principales
             assert Decimal('6822') in montos, f"Falta federal 1a ($6,822). Montos: {montos}"
             assert Decimal('22971') in montos, f"Falta estatal ($22,971). Montos: {montos}"
+
+            # --- Comparar cada folio con produccion (montos + poliza) ---
+            cursor_lectura = connector.db.conectar().cursor()
+            folios_sin_match = []
+            for folio in folios_todos:
+                mov = verificar_movimiento(cursor_lectura, folio)
+                egreso = Decimal(str(mov['Egreso']))
+                clase = (mov['Clase'] or '').strip()
+
+                folio_prod = buscar_folio_produccion(
+                    cursor_lectura, clase, egreso, 2026, 2
+                )
+                if folio_prod:
+                    # Comparar movimiento (formato + montos)
+                    comp_mov = comparar_movimiento_produccion(
+                        cursor_lectura, folio, folio_prod
+                    )
+                    assert comp_mov.get('match_perfecto', False), (
+                        f"Diferencias movimiento (folio {folio}, ${egreso}) vs "
+                        f"produccion (folio {folio_prod}): "
+                        f"{comp_mov.get('diferencias')}"
+                    )
+                    # Comparar poliza linea por linea (cuentas + montos)
+                    comp_pol = comparar_poliza_produccion(
+                        cursor_lectura, folio, folio_prod
+                    )
+                    assert comp_pol.get('match_perfecto', False), (
+                        f"Diferencias poliza (folio {folio}, ${egreso}) vs "
+                        f"produccion (folio {folio_prod}): "
+                        f"{comp_pol.get('diferencias')}"
+                    )
+                else:
+                    folios_sin_match.append((folio, egreso, clase))
+
+            if folios_sin_match:
+                info = [f"Folio {f}: ${e} ({c})" for f, e, c in folios_sin_match]
+                pytest.fail(
+                    f"Folios sin match en produccion: {', '.join(info)}"
+                )
 
         finally:
             with connector.get_cursor(transaccion=True) as cursor:

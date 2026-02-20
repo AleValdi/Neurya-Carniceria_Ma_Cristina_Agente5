@@ -272,6 +272,7 @@ class LineaPoliza:
     abono: Decimal
     concepto: str
     doc_tipo: str = 'CHEQUES'   # 'CHEQUES' o 'TRASPASOS'
+    nombre: str = ''            # Nombre de la cuenta contable (de SAVCuenta)
 
 
 @dataclass
@@ -283,6 +284,30 @@ class DatosCompraPM:
     subtotal: Decimal
     iva: Decimal
     total: Decimal
+
+
+@dataclass
+class DatosCobroCliente:
+    """Datos para crear un cobro completo (SAVFactCob + SAVFactC + SAVCheqPM + SAVPoliza)."""
+    # Factura
+    serie: str                  # 'FC'
+    num_fac: int                # Numero de factura
+    cliente: str                # '000671'
+    cliente_nombre: str         # 'ALEJANDRO HURTADO TREVIÑO'
+    fecha_cobro: date           # Fecha del EdoCta
+    fecha_factura: date         # Fecha de la factura (de SAVFactC)
+    monto: Decimal              # Monto del cobro
+    vendedor: str               # Vendedor de la factura
+    # Banco
+    banco: str                  # 'BANREGIO'
+    cuenta_banco: str           # '055003730017'
+    cuenta_contable: str        # '1120'
+    subcuenta_contable: str     # '040000'
+    # Desglose fiscal (copiado de SAVFactC)
+    subtotal_iva0: Decimal = field(default_factory=lambda: Decimal('0'))
+    subtotal_iva16: Decimal = field(default_factory=lambda: Decimal('0'))
+    iva: Decimal = field(default_factory=lambda: Decimal('0'))
+    ieps: Decimal = field(default_factory=lambda: Decimal('0'))
 
 
 # --- Plan de ejecucion ---
@@ -302,6 +327,7 @@ class PlanEjecucion:
     facturas_pmf: List[DatosFacturaPMF] = field(default_factory=list)
     lineas_poliza: List[LineaPoliza] = field(default_factory=list)
     compras: List[DatosCompraPM] = field(default_factory=list)
+    cobros_cliente: List[DatosCobroCliente] = field(default_factory=list)
     conciliaciones: List[Dict] = field(default_factory=list)
 
     # Mapeo: cuantas facturas_pmf y lineas_poliza pertenecen a cada movimiento_pm.
@@ -338,3 +364,27 @@ class ResultadoProceso:
     num_poliza: Optional[int] = None
     plan: Optional[PlanEjecucion] = None
     error: Optional[str] = None
+
+
+# --- Resultado por linea de estado de cuenta ---
+
+class AccionLinea(str, Enum):
+    """Accion tomada sobre una linea del estado de cuenta."""
+    INSERT = 'INSERT'
+    CONCILIAR = 'CONCILIAR'
+    OMITIR = 'OMITIR'
+    SIN_PROCESAR = 'SIN_PROCESAR'
+    REQUIERE_REVISION = 'REQUIERE_REVISION'
+    ERROR = 'ERROR'
+    DESCONOCIDO = 'DESCONOCIDO'
+
+
+@dataclass
+class ResultadoLinea:
+    """Vinculo entre una linea del estado de cuenta y su resultado."""
+    movimiento: MovimientoBancario
+    tipo_clasificado: TipoProceso
+    accion: AccionLinea
+    folios: List[int] = field(default_factory=list)
+    resultado: Optional[ResultadoProceso] = None
+    nota: Optional[str] = None
