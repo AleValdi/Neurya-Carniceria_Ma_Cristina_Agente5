@@ -1,18 +1,18 @@
 """Procesador E2: Nomina.
 
-Genera hasta 4 movimientos bancarios para el pago de nomina:
-1. Dispersion (transferencias): Tipo 2, Clase NOMINA, TipoEgreso=TRANSFERENCIA
-2. Cheques (efectivo): Tipo 2, Clase NOMINA, TipoEgreso=CHEQUE
-3. Vacaciones pagadas: Tipo 2, Clase NOMINA, TipoEgreso=TRANSFERENCIA
-4. Finiquito: Tipo 2, Clase FINIQUITO, TipoEgreso=TRANSFERENCIA
+Genera N movimientos bancarios para el pago de nomina, descubiertos
+dinamicamente del Excel CONTPAQi:
+- DISPERSION (transferencias): Tipo 2, Clase NOMINA, TipoEgreso=TRANSFERENCIA
+- CHEQUES (efectivo): Tipo 2, Clase NOMINA, TipoEgreso=CHEQUE
+- VAC PAGADAS, FINIQUITO PAGADO, u otros segun columna O del Excel
 
-Poliza principal (dispersion): ~19 lineas
+Poliza principal (primer movimiento es_principal=True): ~19 lineas
   - Cargos: percepciones (cuentas 6200/XXXXXX)
   - Abonos: deducciones (cuentas 2140/XXXXXX)
   - Abono Banco (1120/040000) = monto dispersion
-  - Abono Acreedores Nomina (2120/040000) = cheques + vacaciones + finiquito
+  - Abono Acreedores Nomina (2120/040000) = suma de secundarios
 
-Polizas secundarias (cheques, vacaciones, finiquito): 2 lineas c/u
+Polizas secundarias: 2 lineas c/u
   - Cargo Acreedores Nomina (2120/040000)
   - Abono Banco (1120/040000)
 """
@@ -85,91 +85,49 @@ class ProcesadorNomina:
         num_nomina = datos_nomina.numero_nomina
         concepto_base = f"NOMINA {num_nomina:02d}"
 
-        # --- Movimiento 1: Dispersion (transferencias) ---
-        if datos_nomina.total_dispersion > 0:
+        # Iterar sobre movimientos descubiertos dinamicamente
+        poliza_principal_generada = False
+
+        for mov_nom in datos_nomina.movimientos:
+            if mov_nom.monto <= 0:
+                continue
+
+            concepto_mov = f"{concepto_base} {mov_nom.tipo}"
+
             _agregar_movimiento_nomina(
                 plan, fecha,
-                monto=datos_nomina.total_dispersion,
-                concepto=f"{concepto_base} DISPERSION",
-                clase=CLASE_NOMINA,
-                tipo_egreso='TRANSFERENCIA',
+                monto=mov_nom.monto,
+                concepto=concepto_mov,
+                clase=mov_nom.clase,
+                tipo_egreso=mov_nom.tipo_egreso,
             )
 
-            # Poliza principal: percepciones + deducciones + banco + acreedores
-            lineas = _generar_poliza_principal(
-                datos_nomina=datos_nomina,
-                concepto=concepto_base,
-            )
-            plan.lineas_poliza.extend(lineas)
-
-            plan.facturas_por_movimiento.append(0)
-            plan.lineas_por_movimiento.append(len(lineas))
-
-        # --- Movimiento 2: Cheques (efectivo) ---
-        if datos_nomina.total_cheques > 0:
-            _agregar_movimiento_nomina(
-                plan, fecha,
-                monto=datos_nomina.total_cheques,
-                concepto=f"{concepto_base} CHEQUES",
-                clase=CLASE_NOMINA,
-                tipo_egreso='CHEQUE',
-            )
-
-            lineas = _generar_poliza_secundaria(
-                monto=datos_nomina.total_cheques,
-                concepto=f"{concepto_base} CHEQUES",
-            )
-            plan.lineas_poliza.extend(lineas)
-
-            plan.facturas_por_movimiento.append(0)
-            plan.lineas_por_movimiento.append(2)
-
-        # --- Movimiento 3: Vacaciones pagadas ---
-        if datos_nomina.total_vacaciones > 0:
-            _agregar_movimiento_nomina(
-                plan, fecha,
-                monto=datos_nomina.total_vacaciones,
-                concepto=f"{concepto_base} VACACIONES",
-                clase=CLASE_NOMINA,
-                tipo_egreso='TRANSFERENCIA',
-            )
-
-            lineas = _generar_poliza_secundaria(
-                monto=datos_nomina.total_vacaciones,
-                concepto=f"{concepto_base} VACACIONES",
-            )
-            plan.lineas_poliza.extend(lineas)
-
-            plan.facturas_por_movimiento.append(0)
-            plan.lineas_por_movimiento.append(2)
-
-        # --- Movimiento 4: Finiquito ---
-        if datos_nomina.total_finiquito > 0:
-            _agregar_movimiento_nomina(
-                plan, fecha,
-                monto=datos_nomina.total_finiquito,
-                concepto=f"{concepto_base} FINIQUITO",
-                clase=CLASE_FINIQUITO,
-                tipo_egreso='TRANSFERENCIA',
-            )
-
-            lineas = _generar_poliza_secundaria(
-                monto=datos_nomina.total_finiquito,
-                concepto=f"{concepto_base} FINIQUITO",
-            )
-            plan.lineas_poliza.extend(lineas)
-
-            plan.facturas_por_movimiento.append(0)
-            plan.lineas_por_movimiento.append(2)
+            if mov_nom.es_principal and not poliza_principal_generada:
+                # Poliza completa: percepciones + deducciones + banco + acreedores
+                lineas = _generar_poliza_principal(
+                    datos_nomina=datos_nomina,
+                    concepto=concepto_base,
+                )
+                plan.lineas_poliza.extend(lineas)
+                plan.facturas_por_movimiento.append(0)
+                plan.lineas_por_movimiento.append(len(lineas))
+                poliza_principal_generada = True
+            else:
+                # Poliza secundaria: 2 lineas (Acreedores + Banco)
+                lineas = _generar_poliza_secundaria(
+                    monto=mov_nom.monto,
+                    concepto=concepto_mov,
+                )
+                plan.lineas_poliza.extend(lineas)
+                plan.facturas_por_movimiento.append(0)
+                plan.lineas_por_movimiento.append(2)
 
         # Validaciones
-        plan.validaciones.append(
-            f"Nomina #{num_nomina}: "
-            f"Dispersion=${datos_nomina.total_dispersion:,.2f}, "
-            f"Cheques=${datos_nomina.total_cheques:,.2f}, "
-            f"Vacaciones=${datos_nomina.total_vacaciones:,.2f}, "
-            f"Finiquito=${datos_nomina.total_finiquito:,.2f}"
-        )
+        for mov_nom in datos_nomina.movimientos:
+            plan.validaciones.append(
+                f"{mov_nom.tipo}: ${mov_nom.monto:,.2f} "
+                f"(clase={mov_nom.clase}, egreso={mov_nom.tipo_egreso})"
+            )
         plan.validaciones.append(
             f"Total neto: ${datos_nomina.total_neto:,.2f}"
         )
@@ -237,13 +195,9 @@ def _generar_poliza_principal(
     cta_acreedores = ('2120', '040000')  # Acreedores Diversos Nomina
 
     # Total que deben sumar las percepciones para que la poliza cuadre:
-    # percepciones = deducciones + banco (dispersion) + acreedores (cheques + vac + finiq)
+    # percepciones = deducciones + banco (dispersion) + acreedores (secundarios)
     total_deducciones = sum(d.monto for d in datos_nomina.deducciones)
-    monto_acreedores_esperado = (
-        datos_nomina.total_cheques
-        + datos_nomina.total_vacaciones
-        + datos_nomina.total_finiquito
-    )
+    monto_acreedores_esperado = datos_nomina.total_secundarios
     total_percepciones_esperado = (
         total_deducciones + datos_nomina.total_dispersion + monto_acreedores_esperado
     )
@@ -319,12 +273,8 @@ def _generar_poliza_principal(
     ))
     mov_num += 1
 
-    # --- Abono Acreedores Nomina (cheques + vacaciones + finiquito) ---
-    monto_acreedores = (
-        datos_nomina.total_cheques
-        + datos_nomina.total_vacaciones
-        + datos_nomina.total_finiquito
-    )
+    # --- Abono Acreedores Nomina (suma de movimientos secundarios) ---
+    monto_acreedores = datos_nomina.total_secundarios
     if monto_acreedores > 0:
         lineas.append(LineaPoliza(
             movimiento=mov_num,

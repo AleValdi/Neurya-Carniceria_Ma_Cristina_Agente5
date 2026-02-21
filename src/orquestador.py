@@ -1528,6 +1528,10 @@ def _ejecutar_cobro_completo(
                     f"CM: {num_cobro_multiple} "
                     f"FACT: {cobro_data.serie}-{cobro_data.num_fac},"
                 )
+                referencia_cobro = (
+                    f"CLIENTE: {cobro_data.cliente}-"
+                    f"{cobro_data.cliente_nombre}"
+                )[:40]
                 datos_pm = DatosMovimientoPM(
                     banco=cobro_data.banco,
                     cuenta=cobro_data.cuenta_banco,
@@ -1545,6 +1549,8 @@ def _ejecutar_cobro_completo(
                     paridad=Decimal('1.0000'),
                     tipo_poliza='INGRESO',
                     num_factura=f'CM: {num_cobro_multiple}',
+                    referencia=referencia_cobro,
+                    referencia2=f"FP: Transferencia B: {cobro_data.banco} Ref: ",
                 )
                 insertar_movimiento(cursor, datos_pm, folio)
                 folios.append(folio)

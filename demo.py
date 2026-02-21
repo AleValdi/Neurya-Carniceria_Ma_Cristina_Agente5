@@ -34,6 +34,7 @@ CONTEXTO = ROOT / 'contexto'
 RUTA_EC = DATA / 'PRUEBA.xlsx'
 RUTA_TESORERIA = DATA / 'FEBRERO INGRESOS 2026.xlsx'
 RUTA_NOMINA = CONTEXTO / 'listaRaya' / 'NOMINA 03 CHEQUE.xlsx'
+RUTA_LISTA_RAYA = CONTEXTO / 'listaRaya' / 'Lista de raya 03.pdf'
 RUTA_IMSS = CONTEXTO / 'ConciliacionImssInfonavit' / 'resumen liquidacion_gbl1.pdf'
 
 RUTAS_IMPUESTOS = {
@@ -175,6 +176,7 @@ def main():
             ruta_estado_cuenta=RUTA_EC,
             ruta_tesoreria=RUTA_TESORERIA if RUTA_TESORERIA.exists() else None,
             ruta_nomina=RUTA_NOMINA if RUTA_NOMINA.exists() else None,
+            ruta_lista_raya=RUTA_LISTA_RAYA if RUTA_LISTA_RAYA.exists() else None,
             ruta_imss=RUTA_IMSS if RUTA_IMSS.exists() else None,
             rutas_impuestos=RUTAS_IMPUESTOS,
             dry_run=args.dry_run,

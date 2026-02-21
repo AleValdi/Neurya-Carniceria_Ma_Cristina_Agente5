@@ -68,6 +68,7 @@ def procesar_estado_cuenta(
     ruta_estado_cuenta: Path,
     ruta_tesoreria: Optional[Path] = None,
     ruta_nomina: Optional[Path] = None,
+    ruta_lista_raya: Optional[Path] = None,
     ruta_imss: Optional[Path] = None,
     rutas_impuestos: Optional[Dict[str, Path]] = None,
     dry_run: bool = True,
@@ -91,7 +92,7 @@ def procesar_estado_cuenta(
 
     datos_nomina = None
     if ruta_nomina and ruta_nomina.exists():
-        datos_nomina = parsear_nomina(ruta_nomina)
+        datos_nomina = parsear_nomina(ruta_nomina, ruta_lista_raya=ruta_lista_raya)
         logger.info("  Nomina parseada: #{}", datos_nomina.numero_nomina)
 
     datos_imss = None
@@ -518,6 +519,7 @@ def _construir_plan_traspaso_caja_chica(
         tipo_poliza='DIARIO',
         num_factura='',
         paridad_dof=Decimal('20.0000'),
+        referencia='TRASPASO AUTOMATICO',
     ))
 
     # Movimiento ingreso
@@ -539,6 +541,7 @@ def _construir_plan_traspaso_caja_chica(
         tipo_poliza='DIARIO',
         num_factura='',
         paridad_dof=Decimal('20.0000'),
+        referencia='TRASPASO AUTOMATICO',
     ))
 
     # Poliza: 2 lineas (concepto corto para varchar(60))
@@ -718,6 +721,13 @@ def _procesar_tdc_multi_corte(
             )
 
 
+def _en_borde_de_mes(fecha: date, margen: int = 4) -> bool:
+    """True si la fecha cae en los primeros o ultimos N dias del mes."""
+    import calendar
+    _, ultimo_dia = calendar.monthrange(fecha.year, fecha.month)
+    return fecha.day <= margen or fecha.day > (ultimo_dia - margen)
+
+
 def _procesar_ventas_efectivo(
     por_tipo: Dict[TipoProceso, List[MovimientoBancario]],
     indice: Dict[int, ResultadoLinea],
@@ -729,6 +739,19 @@ def _procesar_ventas_efectivo(
     """Procesa ventas en efectivo del dia."""
     movs = por_tipo.get(TipoProceso.VENTA_EFECTIVO, [])
     if not movs:
+        return
+
+    # Primeros/ultimos 4 dias del mes: omitir (proceso manual por desfase deposito/venta)
+    if _en_borde_de_mes(fecha):
+        logger.info(
+            "  Ventas Efectivo: {} depositos OMITIDOS (borde de mes, dia {})",
+            len(movs), fecha.day,
+        )
+        for mov in movs:
+            indice[id(mov)].accion = AccionLinea.OMITIR
+            indice[id(mov)].nota = (
+                f"Borde de mes (dia {fecha.day}): proceso manual"
+            )
         return
 
     logger.info("  Ventas Efectivo: {} depositos", len(movs))

@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 
 from loguru import logger
 
+from src.erp.utils import numero_a_letra
 from src.models import DatosMovimientoPM
 
 
@@ -27,6 +28,10 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
     # HoraAlta usa base 1899-12-30 con la hora del dia
     hora_alta = datetime(1899, 12, 30, ahora.hour, ahora.minute, ahora.second)
 
+    # TotalLetra: generar automaticamente si no viene pre-calculado
+    monto = datos.ingreso if datos.ingreso > 0 else datos.egreso
+    total_letra = datos.total_letra or numero_a_letra(monto)
+
     cursor.execute("""
         INSERT INTO SAVCheqPM (
             Banco, Cuenta, Age, Mes, Dia, Tipo, Folio,
@@ -36,7 +41,8 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             TipoPoliza, NumPoliza,
             Capturo, Sucursal, Saldo,
             FechaAlta, HoraAlta,
-            NumFactura
+            NumFactura,
+            Referencia, Referencia2, TotalLetra
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
@@ -45,7 +51,8 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             ?, ?,
             ?, ?, ?,
             ?, ?,
-            ?
+            ?,
+            ?, ?, ?
         )
     """, (
         datos.banco,
@@ -77,6 +84,9 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         ahora,
         hora_alta,
         datos.num_factura,
+        datos.referencia,
+        datos.referencia2,
+        total_letra,
     ))
 
     logger.debug(

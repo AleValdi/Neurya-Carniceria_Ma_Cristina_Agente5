@@ -9,6 +9,7 @@ from src.models import (
     DatosNomina,
     LineaContable,
     MovimientoBancario,
+    MovimientoNomina,
     TipoCA,
     TipoProceso,
 )
@@ -31,10 +32,12 @@ def _datos_nomina_completa() -> DatosNomina:
     """Datos de nomina con percepciones y deducciones."""
     return DatosNomina(
         numero_nomina=3,
-        total_dispersion=Decimal('117992.20'),
-        total_cheques=Decimal('24980.60'),
-        total_vacaciones=Decimal('3905.20'),
-        total_finiquito=Decimal('3344.40'),
+        movimientos=[
+            MovimientoNomina(tipo='DISPERSION', monto=Decimal('117992.20'), clase='NOMINA', tipo_egreso='TRANSFERENCIA', es_principal=True),
+            MovimientoNomina(tipo='CHEQUES', monto=Decimal('24980.60'), clase='NOMINA', tipo_egreso='CHEQUE', es_principal=False),
+            MovimientoNomina(tipo='VAC PAGADAS', monto=Decimal('3905.20'), clase='NOMINA', tipo_egreso='TRANSFERENCIA', es_principal=False),
+            MovimientoNomina(tipo='FINIQUITO PAGADO', monto=Decimal('3344.40'), clase='FINIQUITO', tipo_egreso='TRANSFERENCIA', es_principal=False),
+        ],
         percepciones=[
             LineaContable(concepto='SUELDO', cuenta='6200', subcuenta='010000', monto=Decimal('119737.16')),
             LineaContable(concepto='SEPTIMO DIA', cuenta='6200', subcuenta='240000', monto=Decimal('20473.00')),
@@ -59,10 +62,9 @@ def _datos_nomina_simple() -> DatosNomina:
     """Datos de nomina minimos (solo dispersion)."""
     return DatosNomina(
         numero_nomina=3,
-        total_dispersion=Decimal('100000.00'),
-        total_cheques=Decimal('0'),
-        total_vacaciones=Decimal('0'),
-        total_finiquito=Decimal('0'),
+        movimientos=[
+            MovimientoNomina(tipo='DISPERSION', monto=Decimal('100000.00'), es_principal=True),
+        ],
     )
 
 

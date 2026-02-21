@@ -125,25 +125,41 @@ class LineaContable:
 
 
 @dataclass
+class MovimientoNomina:
+    """Un movimiento individual de nomina (dispersion, cheques, vacaciones, etc.)."""
+    tipo: str               # 'DISPERSION', 'CHEQUES', 'VAC PAGADAS', 'FINIQUITO PAGADO', etc.
+    monto: Decimal
+    clase: str = 'NOMINA'               # 'NOMINA' o 'FINIQUITO'
+    tipo_egreso: str = 'TRANSFERENCIA'  # 'TRANSFERENCIA' o 'CHEQUE'
+    es_principal: bool = False          # True solo para DISPERSION (recibe poliza completa)
+
+
+@dataclass
 class DatosNomina:
     """Datos parseados del Excel de nomina CONTPAQi."""
     numero_nomina: int          # Ej: 3 (de "NOMINA 03 CHEQUE.xlsx")
-    total_dispersion: Decimal   # Transferencias
-    total_cheques: Decimal      # Pagos en efectivo/cheque
-    total_vacaciones: Decimal   # Vacaciones pagadas
-    total_finiquito: Decimal    # Finiquitos
 
+    movimientos: List[MovimientoNomina] = field(default_factory=list)
     percepciones: List[LineaContable] = field(default_factory=list)
     deducciones: List[LineaContable] = field(default_factory=list)
 
     @property
     def total_neto(self) -> Decimal:
-        """Total neto de la nomina."""
-        return (
-            self.total_dispersion
-            + self.total_cheques
-            + self.total_vacaciones
-            + self.total_finiquito
+        """Total neto de la nomina (suma de todos los movimientos)."""
+        return sum((m.monto for m in self.movimientos), Decimal('0'))
+
+    @property
+    def total_dispersion(self) -> Decimal:
+        """Monto del movimiento principal (dispersion)."""
+        return sum(
+            (m.monto for m in self.movimientos if m.es_principal), Decimal('0'),
+        )
+
+    @property
+    def total_secundarios(self) -> Decimal:
+        """Suma de movimientos secundarios (cheques, vacaciones, finiquito, etc.)."""
+        return sum(
+            (m.monto for m in self.movimientos if not m.es_principal), Decimal('0'),
         )
 
 
@@ -244,6 +260,9 @@ class DatosMovimientoPM:
     tipo_poliza: str            # 'INGRESO', 'EGRESO', 'DIARIO'
     num_factura: str            # Referencia factura (ej: 'D-20204')
     paridad_dof: Optional[Decimal] = None  # 20.0000 para traspasos, None para otros
+    referencia: str = ''                    # 'TRASPASO AUTOMATICO' para traspasos, '' para otros
+    referencia2: Optional[str] = None       # Solo cobros: 'FP: ... B: ... Ref: '
+    total_letra: str = ''                   # '( MONTO PESOS XX/100 M.N. )' — se genera automaticamente
     # Campos que se asignan al ejecutar
     folio: Optional[int] = None
     num_poliza: Optional[int] = None
