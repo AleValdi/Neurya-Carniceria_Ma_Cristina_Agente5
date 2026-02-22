@@ -27,6 +27,8 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
     ahora = datetime.now()
     # HoraAlta usa base 1899-12-30 con la hora del dia
     hora_alta = datetime(1899, 12, 30, ahora.hour, ahora.minute, ahora.second)
+    # FechaMov = fecha del movimiento bancario (Age/Mes/Dia), sin hora
+    fecha_mov = datetime(datos.age, datos.mes, datos.dia)
 
     # TotalLetra: generar automaticamente si no viene pre-calculado
     monto = datos.ingreso if datos.ingreso > 0 else datos.egreso
@@ -40,9 +42,10 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             Cia, Fuente, Oficina, CuentaOficina,
             TipoPoliza, NumPoliza,
             Capturo, Sucursal, Saldo,
-            FechaAlta, HoraAlta,
+            FechaAlta, HoraAlta, FechaMov,
             NumFactura,
-            Referencia, Referencia2, TotalLetra
+            Referencia, Referencia2, TotalLetra,
+            Proveedor, ProveedorNombre, TipoProveedor
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
@@ -50,8 +53,9 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             ?, ?, ?, ?,
             ?, ?,
             ?, ?, ?,
-            ?, ?,
+            ?, ?, ?,
             ?,
+            ?, ?, ?,
             ?, ?, ?
         )
     """, (
@@ -83,10 +87,14 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         Decimal('0'),
         ahora,
         hora_alta,
+        fecha_mov,
         datos.num_factura,
         datos.referencia,
         datos.referencia2,
         total_letra,
+        datos.proveedor or '',
+        datos.proveedor_nombre or '',
+        datos.tipo_proveedor or '',
     ))
 
     logger.debug(

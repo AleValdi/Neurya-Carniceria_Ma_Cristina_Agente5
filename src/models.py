@@ -263,6 +263,9 @@ class DatosMovimientoPM:
     referencia: str = ''                    # 'TRASPASO AUTOMATICO' para traspasos, '' para otros
     referencia2: Optional[str] = None       # Solo cobros: 'FP: ... B: ... Ref: '
     total_letra: str = ''                   # '( MONTO PESOS XX/100 M.N. )' — se genera automaticamente
+    proveedor: str = ''                      # Clave proveedor (ej: '001081' para comisiones)
+    proveedor_nombre: str = ''               # 'BANCO REGIONAL'
+    tipo_proveedor: str = ''                 # 'NA'
     # Campos que se asignan al ejecutar
     folio: Optional[int] = None
     num_poliza: Optional[int] = None

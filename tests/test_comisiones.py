@@ -177,17 +177,17 @@ class TestProcesadorComisiones:
         assert plan.lineas_poliza[0].tipo_ca == TipoCA.CARGO
         assert plan.lineas_poliza[0].cargo == Decimal('6.96')
 
-        # Linea 2: Cargo IVA Acreditable Pte Pago (1240/010000) = IVA
+        # Linea 2: Abono IVA Acreditable Pte Pago (1240/010000) = IVA
         assert plan.lineas_poliza[1].cuenta == '1240'
         assert plan.lineas_poliza[1].subcuenta == '010000'
-        assert plan.lineas_poliza[1].tipo_ca == TipoCA.CARGO
-        assert plan.lineas_poliza[1].cargo == Decimal('0.96')
+        assert plan.lineas_poliza[1].tipo_ca == TipoCA.ABONO
+        assert plan.lineas_poliza[1].abono == Decimal('0.96')
 
-        # Linea 3: Abono IVA Acreditable Pagado (1246/010000) = IVA
+        # Linea 3: Cargo IVA Acreditable Pagado (1246/010000) = IVA
         assert plan.lineas_poliza[2].cuenta == '1246'
         assert plan.lineas_poliza[2].subcuenta == '010000'
-        assert plan.lineas_poliza[2].tipo_ca == TipoCA.ABONO
-        assert plan.lineas_poliza[2].abono == Decimal('0.96')
+        assert plan.lineas_poliza[2].tipo_ca == TipoCA.CARGO
+        assert plan.lineas_poliza[2].cargo == Decimal('0.96')
 
         # Linea 4: Abono Banco = total
         assert plan.lineas_poliza[3].tipo_ca == TipoCA.ABONO

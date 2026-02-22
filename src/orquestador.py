@@ -28,6 +28,7 @@ from src.erp.cobros import (
 from src.erp.compras import insertar_factura_compra
 from src.erp.consecutivos import obtener_siguiente_folio, obtener_siguiente_poliza
 from src.erp.facturas_movimiento import insertar_factura_movimiento
+from src.erp.pago_factura import insertar_cheq_pmp, insertar_rec_pago
 from src.erp.movimientos import (
     actualizar_num_poliza,
     buscar_movimiento_existente,
@@ -1375,14 +1376,56 @@ def _ejecutar_plan(
                         factura_idx += 1
 
                 # 4. INSERT SAVRecC/RecD (compras, si aplica)
+                #    + SAVRecPago + SAVCheqPMP (vinculo movimiento ↔ factura)
                 if compra_idx < len(plan.compras):
                     datos_compra = plan.compras[compra_idx]
-                    insertar_factura_compra(cursor, datos_compra)
+                    num_rec = insertar_factura_compra(cursor, datos_compra)
+
+                    # Crear pago y detalle si tiene proveedor
+                    if datos_pm.proveedor:
+                        pago = insertar_rec_pago(
+                            cursor,
+                            serie='F',
+                            num_rec=num_rec,
+                            proveedor=datos_pm.proveedor,
+                            proveedor_nombre=datos_pm.proveedor_nombre,
+                            fecha=datetime(
+                                datos_pm.age, datos_pm.mes, datos_pm.dia,
+                            ),
+                            monto=datos_compra.total,
+                            banco=datos_pm.banco,
+                            cuenta=datos_pm.cuenta,
+                            folio=folio,
+                            factura=datos_compra.factura,
+                        )
+                        insertar_cheq_pmp(
+                            cursor,
+                            banco=datos_pm.banco,
+                            cuenta=datos_pm.cuenta,
+                            age=datos_pm.age,
+                            mes=datos_pm.mes,
+                            folio=folio,
+                            num_rec=num_rec,
+                            pago=pago,
+                            fecha=datetime(
+                                datos_pm.age, datos_pm.mes, datos_pm.dia,
+                            ),
+                            monto=datos_compra.total,
+                            iva=datos_compra.iva,
+                            factura=datos_compra.factura,
+                            proveedor=datos_pm.proveedor,
+                        )
+
                     compra_idx += 1
 
                 # 5-7. Poliza (solo si hay lineas para este movimiento)
                 lineas_mov = plan.lineas_poliza[linea_idx:linea_idx + n_lineas]
                 linea_idx += n_lineas
+
+                # Resolver placeholders {folio} en conceptos de poliza
+                for linea in lineas_mov:
+                    if '{folio}' in linea.concepto:
+                        linea.concepto = linea.concepto.format(folio=folio)
 
                 num_poliza = 0
                 if lineas_mov:
@@ -1451,8 +1494,15 @@ def _ejecutar_conciliacion(
     plan: PlanEjecucion,
     connector: SAV7Connector,
 ) -> ResultadoProceso:
-    """Ejecuta conciliaciones (solo UPDATEs) dentro de una transaccion."""
+    """Ejecuta conciliaciones dentro de una transaccion.
+
+    Para cada conciliacion:
+    1. UPDATE SAVCheqPM SET Conciliada = 1
+    2. Si tiene lineas de poliza (pagos a proveedores):
+       INSERT SAVPoliza usando el NumPoliza pre-asignado del movimiento
+    """
     try:
+        poliza_offset = 0
         with connector.get_cursor(transaccion=True) as cursor:
             for conc in plan.conciliaciones:
                 folio = conc['folio']
@@ -1465,6 +1515,33 @@ def _ejecutar_conciliacion(
                     "Conciliado: Folio {} → Conciliada=1",
                     folio,
                 )
+
+                # Insertar poliza si hay lineas (pagos a proveedores)
+                num_poliza = conc.get('num_poliza')
+                num_lineas = conc.get('lineas_poliza', 0)
+                if num_poliza and num_lineas > 0:
+                    lineas = plan.lineas_poliza[
+                        poliza_offset:poliza_offset + num_lineas
+                    ]
+                    fecha_mov = datetime(
+                        plan.fecha_movimiento.year,
+                        plan.fecha_movimiento.month,
+                        plan.fecha_movimiento.day,
+                    )
+                    insertar_poliza(
+                        cursor,
+                        num_poliza,
+                        lineas,
+                        folio,
+                        fecha_mov,
+                        tipo_poliza='EGRESO',
+                        concepto_encabezado=conc.get('descripcion', ''),
+                    )
+                    logger.info(
+                        "Poliza pago: Folio {} → Poliza {} ({} lineas)",
+                        folio, num_poliza, num_lineas,
+                    )
+                    poliza_offset += num_lineas
 
         return ResultadoProceso(
             exito=True,

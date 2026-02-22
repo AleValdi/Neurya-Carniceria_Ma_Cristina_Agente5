@@ -6,7 +6,7 @@ UNA sola vez, y retorna un ResultadoLinea por cada linea del estado de cuenta.
 """
 
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -178,6 +178,7 @@ def procesar_estado_cuenta(
             datos_imss=datos_imss,
             connector=connector,
             dry_run=dry_run,
+            movs_por_fecha=movs_por_fecha,
         )
 
     return lineas
@@ -198,6 +199,7 @@ def _procesar_dia(
     datos_imss,
     connector: Optional[SAV7Connector],
     dry_run: bool,
+    movs_por_fecha: Optional[Dict] = None,
 ):
     """Procesa todos los tipos de movimiento para un dia."""
     # Agrupar por tipo
@@ -222,7 +224,11 @@ def _procesar_dia(
     _procesar_nomina(por_tipo, indice, fecha, datos_nomina, connector, dry_run)
 
     # 6. Conciliaciones (pagos + cobros)
-    _procesar_conciliaciones(por_tipo, indice, fecha, connector, dry_run)
+    # Pagos a proveedores se afectan con 1 dia de retraso (dia anterior)
+    _procesar_conciliaciones(
+        por_tipo, indice, fecha, connector, dry_run,
+        movs_por_fecha=movs_por_fecha,
+    )
 
     # 7. Impuestos (federal + estatal + IMSS)
     _procesar_impuestos(
@@ -865,19 +871,42 @@ def _procesar_conciliaciones(
     fecha: date,
     connector: Optional[SAV7Connector],
     dry_run: bool,
+    movs_por_fecha: Optional[Dict] = None,
 ):
-    """Procesa conciliaciones (pagos a proveedores + cobros a clientes)."""
-    # --- Pagos a proveedores ---
-    movs_pagos = por_tipo.get(TipoProceso.PAGO_PROVEEDOR, [])
-    if movs_pagos:
-        logger.info("  Pagos Proveedor: {} movimientos", len(movs_pagos))
+    """Procesa conciliaciones (pagos a proveedores + cobros a clientes).
+
+    Pagos a proveedores se afectan con 1 dia de retraso: al procesar dia X,
+    se concilian los pagos del dia X-1 (el usuario espera un dia para
+    confirmar que el pago no fue devuelto o rechazado).
+    """
+    # --- Pagos a proveedores (con retraso de 1 dia) ---
+    # Marcar pagos del dia actual como pendientes
+    movs_pagos_hoy = por_tipo.get(TipoProceso.PAGO_PROVEEDOR, [])
+    for mov in movs_pagos_hoy:
+        rl = indice[id(mov)]
+        rl.accion = AccionLinea.SIN_PROCESAR
+        rl.nota = "Pendiente: se afecta al dia siguiente"
+
+    # Conciliar pagos del dia anterior
+    fecha_ayer = fecha - timedelta(days=1)
+    movs_pagos_ayer = []
+    if movs_por_fecha:
+        for mov in movs_por_fecha.get(fecha_ayer, []):
+            if mov.tipo_proceso == TipoProceso.PAGO_PROVEEDOR:
+                movs_pagos_ayer.append(mov)
+
+    if movs_pagos_ayer:
+        logger.info(
+            "  Pagos Proveedor: {} movimientos (del {}, afectados hoy {})",
+            len(movs_pagos_ayer), fecha_ayer, fecha,
+        )
         procesador_pagos = ProcesadorConciliacionPagos()
         cursor = _obtener_cursor_lectura(connector)
 
         try:
-            for mov in movs_pagos:
+            for mov in movs_pagos_ayer:
                 plan = procesador_pagos.construir_plan(
-                    movimientos=[mov], fecha=fecha, cursor=cursor,
+                    movimientos=[mov], fecha=fecha_ayer, cursor=cursor,
                 )
                 rl = indice[id(mov)]
 
@@ -886,7 +915,7 @@ def _procesar_conciliaciones(
                     if dry_run:
                         rl.accion = AccionLinea.CONCILIAR
                         rl.folios = [folio]
-                        rl.nota = f"DRY-RUN | Folio {folio}"
+                        rl.nota = f"DRY-RUN | Folio {folio} (afectado dia {fecha})"
                     else:
                         resultado = _ejecutar_conciliacion(plan, connector)
                         if resultado.exito:
@@ -906,6 +935,11 @@ def _procesar_conciliaciones(
         finally:
             if cursor:
                 cursor.close()
+    elif movs_pagos_hoy:
+        logger.info(
+            "  Pagos Proveedor: {} del dia {} pendientes (se afectan mañana)",
+            len(movs_pagos_hoy), fecha,
+        )
 
     # --- Cobros a clientes ---
     movs_cobros = por_tipo.get(TipoProceso.COBRO_CLIENTE, [])

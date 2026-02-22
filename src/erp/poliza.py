@@ -86,7 +86,7 @@ def insertar_poliza(
             folio,
             tipo_poliza,
             fecha,
-            ahora,
+            fecha,
             hora_alta,
             'AGENTE5',
             sucursal,

@@ -43,7 +43,8 @@ from src.models import (
 CLASE = 'COMISIONES BANCARIAS'
 TIPO_MOVIMIENTO = 3  # Egreso con Factura
 PROVEEDOR_BANCO = '001081'
-NOMBRE_PROVEEDOR = 'BANCO REGIONAL DE MONTERREY SA'
+NOMBRE_PROVEEDOR = 'BANCO REGIONAL'
+TIPO_PROVEEDOR = 'NA'
 
 
 class ProcesadorComisiones:
@@ -129,6 +130,9 @@ class ProcesadorComisiones:
                 paridad=Decimal('1.0000'),
                 tipo_poliza='EGRESO',
                 num_factura=factura_ref,
+                proveedor=PROVEEDOR_BANCO,
+                proveedor_nombre=NOMBRE_PROVEEDOR,
+                tipo_proveedor=TIPO_PROVEEDOR,
             )
             plan.movimientos_pm.append(datos_pm)
 
@@ -232,6 +236,8 @@ def _generar_poliza_comisiones(
     cta_iva_pte = CuentasContables.IVA_ACREDITABLE_PTE_PAGO
     cta_iva_pagado = CuentasContables.IVA_ACREDITABLE_PAGADO
 
+    prefijo = f"Prov:{PROVEEDOR_BANCO} Nombre:{NOMBRE_PROVEEDOR[:10]}"
+
     return [
         # 1. Cargo Proveedores
         LineaPoliza(
@@ -241,27 +247,27 @@ def _generar_poliza_comisiones(
             tipo_ca=TipoCA.CARGO,
             cargo=total,
             abono=Decimal('0'),
-            concepto=f"Prov: {PROVEEDOR_BANCO} {NOMBRE_PROVEEDOR[:30]}",
+            concepto=f"{prefijo} Total Pago: {{folio}} Suc.5",
         ),
-        # 2. Cargo IVA Acreditable Pte Pago
+        # 2. Abono IVA Acreditable Pte Pago (reclasifica IVA)
         LineaPoliza(
             movimiento=2,
             cuenta=cta_iva_pte[0],
             subcuenta=cta_iva_pte[1],
-            tipo_ca=TipoCA.CARGO,
-            cargo=iva,
-            abono=Decimal('0'),
-            concepto=f"{concepto} IVA Acred.",
+            tipo_ca=TipoCA.ABONO,
+            cargo=Decimal('0'),
+            abono=iva,
+            concepto=f"{prefijo} IVAPP Suc.5",
         ),
-        # 3. Abono IVA Acreditable Pagado
+        # 3. Cargo IVA Acreditable Pagado (reclasifica IVA)
         LineaPoliza(
             movimiento=3,
             cuenta=cta_iva_pagado[0],
             subcuenta=cta_iva_pagado[1],
-            tipo_ca=TipoCA.ABONO,
-            cargo=Decimal('0'),
-            abono=iva,
-            concepto=f"{concepto} IVA Acred.",
+            tipo_ca=TipoCA.CARGO,
+            cargo=iva,
+            abono=Decimal('0'),
+            concepto=f"{prefijo} IVAP Suc.5",
         ),
         # 4. Abono Banco
         LineaPoliza(
@@ -271,6 +277,6 @@ def _generar_poliza_comisiones(
             tipo_ca=TipoCA.ABONO,
             cargo=Decimal('0'),
             abono=total,
-            concepto=f"Banco: BANREGIO {concepto}",
+            concepto="Banco: BANREGIO. Folio Pago: {folio}",
         ),
     ]

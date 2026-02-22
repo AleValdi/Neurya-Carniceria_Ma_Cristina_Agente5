@@ -47,7 +47,7 @@ def insertar_factura_compra(
             Articulos, Partidas,
             Paridad, Moneda, MetododePago,
             Sucursal, NumOC,
-            RFC
+            RFC, TipoRecepcion, Referencia
         ) VALUES (
             ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
@@ -56,13 +56,13 @@ def insertar_factura_compra(
             ?, ?,
             ?, ?, ?,
             ?, ?,
-            ?
+            ?, ?, ?
         )
     """, (
         serie,
         num_rec,
         datos.proveedor,
-        'BANCO REGIONAL DE MONTERREY SA',
+        'BANCO REGIONAL',
         datos.fecha,
         datos.subtotal,
         datos.iva,
@@ -77,10 +77,12 @@ def insertar_factura_compra(
         1,                  # Partidas (1 linea de detalle)
         Decimal('20.00'),   # Paridad
         'PESOS',            # Moneda
-        'PPD',              # MetododePago
+        'PUE',              # MetododePago
         5,                  # Sucursal
         0,                  # NumOC
-        'DCM02072238A',     # RFC
+        'BRM940216EQ6',     # RFC (del proveedor BANCO REGIONAL)
+        'COMISIONES BANCARIAS',  # TipoRecepcion (tipo de documento)
+        'CREDITO',          # Referencia
     ))
 
     logger.debug(
