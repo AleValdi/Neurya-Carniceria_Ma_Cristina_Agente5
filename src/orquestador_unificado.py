@@ -128,14 +128,22 @@ def procesar_estado_cuenta(
     if ruta_ajustes.exists():
         ajustes = parsear_ajustes_impuestos(ruta_ajustes)
         if ajustes:
-            logger.info("  Ajustes impuestos desde Excel: {}",
-                        {k: f"${v:,.2f}" for k, v in ajustes.items()})
+            resumen_ajustes = {
+                k: f"${v:,.2f}" if isinstance(v, Decimal) else f"{len(v)} retenciones"
+                for k, v in ajustes.items()
+            }
+            logger.info("  Ajustes impuestos desde Excel: {}", resumen_ajustes)
             if 'total_imss' in ajustes and datos_imss:
                 datos_imss.total_imss = ajustes['total_imss']
             if 'iva_acumulable' in ajustes and datos_federal:
                 datos_federal.iva_acumulable = ajustes['iva_acumulable']
             if 'iva_acreditable' in ajustes and datos_federal:
                 datos_federal.iva_acreditable = ajustes['iva_acreditable']
+            if 'retenciones_iva' in ajustes and datos_federal:
+                datos_federal.retenciones_iva = ajustes['retenciones_iva']
+                logger.info("  Retenciones IVA desde Excel: {}",
+                            [(r.proveedor, r.nombre, f"${r.monto:,.2f}")
+                             for r in ajustes['retenciones_iva']])
 
     # --- 2. Clasificar UNA vez ---
     logger.info("Clasificando movimientos...")
