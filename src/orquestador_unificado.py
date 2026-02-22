@@ -17,6 +17,7 @@ from src.clasificador import clasificar_movimientos, resumen_clasificacion
 from src.entrada.estado_cuenta import parsear_estado_cuenta_plano
 from src.entrada.tesoreria import parsear_tesoreria
 from src.entrada.nomina import parsear_nomina
+from src.entrada.ajustes_impuestos import parsear_ajustes_impuestos
 from src.entrada.impuestos_pdf import (
     parsear_imss,
     parsear_impuesto_estatal,
@@ -121,6 +122,20 @@ def procesar_estado_cuenta(
         if ruta_est:
             datos_estatal = parsear_impuesto_estatal(ruta_est)
             logger.info("  Impuesto estatal parseado: {}", datos_estatal.periodo)
+
+    # --- 1.5 Override opcional desde Excel de ajustes ---
+    ruta_ajustes = ruta_estado_cuenta.parent / 'AJUSTES_IMPUESTOS.xlsx'
+    if ruta_ajustes.exists():
+        ajustes = parsear_ajustes_impuestos(ruta_ajustes)
+        if ajustes:
+            logger.info("  Ajustes impuestos desde Excel: {}",
+                        {k: f"${v:,.2f}" for k, v in ajustes.items()})
+            if 'total_imss' in ajustes and datos_imss:
+                datos_imss.total_imss = ajustes['total_imss']
+            if 'iva_acumulable' in ajustes and datos_federal:
+                datos_federal.iva_acumulable = ajustes['iva_acumulable']
+            if 'iva_acreditable' in ajustes and datos_federal:
+                datos_federal.iva_acreditable = ajustes['iva_acreditable']
 
     # --- 2. Clasificar UNA vez ---
     logger.info("Clasificando movimientos...")
