@@ -1500,7 +1500,17 @@ def _ejecutar_conciliacion(
     1. UPDATE SAVCheqPM SET Conciliada = 1
     2. Si tiene lineas de poliza (pagos a proveedores):
        INSERT SAVPoliza usando el NumPoliza pre-asignado del movimiento
+    3. Si tiene factura vinculada (SAVCheqPMP):
+       UPDATE SAVRecPago SET Estatus='Pagado', FPago, Banco, Referencia...
+       UPDATE SAVRecC SET Saldo=0, Estatus='Tot.Pagada'
     """
+    # Mapeo TipoEgreso (SAVCheqPM) → FPago (SAVRecPago)
+    MAPA_FPAGO = {
+        'TRANSFERENCIA': 'Transferencia',
+        'TARJETA': 'TARJETA',
+        'CHEQUE': 'Cheque',
+    }
+
     try:
         poliza_offset = 0
         with connector.get_cursor(transaccion=True) as cursor:
@@ -1542,6 +1552,54 @@ def _ejecutar_conciliacion(
                         folio, num_poliza, num_lineas,
                     )
                     poliza_offset += num_lineas
+
+                # Actualizar factura de compras y registro de pago
+                num_rec = conc.get('factura_num_rec')
+                serie = conc.get('factura_serie', 'F')
+                if num_rec:
+                    cuenta_banco = conc.get('cuenta_banco', '')
+                    tipo_egreso = conc.get('tipo_egreso', '')
+                    banco_nombre = conc.get('banco_nombre', 'BANREGIO')
+                    fpago = MAPA_FPAGO.get(tipo_egreso, tipo_egreso)
+                    referencia = f"{cuenta_banco}F: {folio}"
+                    fecha_pago = plan.fecha_movimiento
+
+                    # UPDATE SAVRecPago: Programado → Pagado
+                    cursor.execute("""
+                        UPDATE SAVRecPago
+                        SET Estatus = 'Pagado',
+                            FPago = ?,
+                            Banco = ?,
+                            Referencia = ?,
+                            SolicitudPago = 1,
+                            Paridad = 1,
+                            Fecha = ?,
+                            UltimoCambio = CAST(GETDATE() AS DATE),
+                            UltimoCambioHora = CAST(CAST(GETDATE() AS FLOAT)
+                                - FLOOR(CAST(GETDATE() AS FLOAT)) AS DATETIME)
+                        WHERE Serie = ? AND NumRec = ?
+                    """, (
+                        fpago, banco_nombre, referencia,
+                        fecha_pago.isoformat(),
+                        serie, num_rec,
+                    ))
+                    logger.info(
+                        "RecPago: {}-{} → Estatus='Pagado', FPago='{}', "
+                        "Ref='{}'",
+                        serie, num_rec, fpago, referencia,
+                    )
+
+                    # UPDATE SAVRecC: Saldo=0, Estatus='Tot.Pagada'
+                    cursor.execute("""
+                        UPDATE SAVRecC
+                        SET Saldo = 0,
+                            Estatus = 'Tot.Pagada'
+                        WHERE Serie = ? AND NumRec = ?
+                    """, (serie, num_rec))
+                    logger.info(
+                        "RecC: {}-{} → Saldo=0, Estatus='Tot.Pagada'",
+                        serie, num_rec,
+                    )
 
         return ResultadoProceso(
             exito=True,

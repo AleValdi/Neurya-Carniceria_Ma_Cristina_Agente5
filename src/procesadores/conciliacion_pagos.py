@@ -2,13 +2,16 @@
 
 Los pagos a proveedores ya existen en SAVCheqPM (capturados manualmente
 o por otro modulo). Este procesador CONCILIA y AFECTA: encuentra el
-movimiento existente que corresponde al SPEI del estado de cuenta,
-marca Conciliada=1, y genera la poliza contable.
+movimiento existente que corresponde al cargo del estado de cuenta,
+marca Conciliada=1, genera la poliza contable, y actualiza la factura
+de compras (SAVRecC) y el registro de pago (SAVRecPago).
 
 Caracteristicas:
 - Conciliacion: UPDATE SAVCheqPM SET Conciliada=1
 - Poliza: INSERT SAVPoliza (2-8 lineas segun IVA/IEPS/retenciones)
   usando el NumPoliza pre-asignado del movimiento
+- Factura compras: UPDATE SAVRecC SET Saldo=0, Estatus='Tot.Pagada'
+- Registro pago: UPDATE SAVRecPago SET Estatus='Pagado', FPago, Banco, Referencia...
 - Matching: por monto + fecha (+-2 dias) + cuenta bancaria
 - Tipo existente en BD: 3 (Egreso con Factura), Clase: PAGOS A PROVEEDORES
 """
@@ -104,6 +107,14 @@ class ProcesadorConciliacionPagos:
                         conc['lineas_poliza'] = len(lineas)
                         conc['banco_nombre'] = match['banco']
 
+                # Datos para actualizar factura de compras y registro de pago
+                if match.get('factura_num_rec'):
+                    conc['factura_serie'] = match.get('factura_serie', 'F')
+                    conc['factura_num_rec'] = match['factura_num_rec']
+                    conc['cuenta_banco'] = match.get('cuenta', '')
+                    conc['tipo_egreso'] = match.get('tipo_egreso', '')
+                    conc['banco_nombre'] = match.get('banco', 'BANREGIO')
+
                 plan.conciliaciones.append(conc)
                 plan.validaciones.append(
                     f"Match: SPEI ${mov.monto:,.2f} -> "
@@ -149,7 +160,7 @@ def _buscar_pago_en_bd(
     try:
         cursor.execute("""
             SELECT Folio, Egreso, Concepto, Dia, Mes, Age,
-                   NumPoliza, Banco, Cuenta
+                   NumPoliza, Banco, Cuenta, TipoEgreso
             FROM SAVCheqPM
             WHERE Cuenta = ?
               AND Tipo = ?
@@ -181,6 +192,7 @@ def _buscar_pago_en_bd(
             'num_poliza': row[6],
             'banco': row[7].strip() if row[7] else '',
             'cuenta': row[8].strip() if row[8] else '',
+            'tipo_egreso': row[9].strip() if row[9] else '',
         }
 
         # Consultar SAVCheqPMP para datos de poliza
@@ -195,21 +207,24 @@ def _buscar_pago_en_bd(
 
 
 def _enriquecer_con_pmp(cursor, result: Dict):
-    """Consulta SAVCheqPMP y SAVProveedor para obtener datos de poliza.
+    """Consulta SAVCheqPMP y SAVProveedor para obtener datos de poliza y factura.
 
     Suma IVA, IEPS, RetIVA, RetISR de todas las facturas del pago.
     Obtiene nombre del proveedor de SAVProveedor.
+    Obtiene Serie/NumRec de la factura vinculada para actualizar SAVRecC/SAVRecPago.
     """
     folio = result['folio']
 
     try:
-        # Agregar impuestos de todas las facturas del pago
+        # Agregar impuestos y datos de factura vinculada
         cursor.execute("""
             SELECT TOP 1 Proveedor, TipoRecepcion,
                    SUM(Iva) OVER () as total_iva,
                    SUM(IEPS) OVER () as total_ieps,
                    SUM(RetencionIVA) OVER () as total_retiva,
-                   SUM(RetencionISR) OVER () as total_retisr
+                   SUM(RetencionISR) OVER () as total_retisr,
+                   Serie, NumRec, MontoPago, MontoFactura,
+                   PorcIva, MetododePago, RFC, TipoProveedor
             FROM SAVCheqPMP
             WHERE Folio = ?
         """, (folio,))
@@ -225,6 +240,15 @@ def _enriquecer_con_pmp(cursor, result: Dict):
         result['ieps'] = Decimal(str(row[3])) if row[3] else Decimal('0')
         result['retencion_iva'] = Decimal(str(row[4])) if row[4] else Decimal('0')
         result['retencion_isr'] = Decimal(str(row[5])) if row[5] else Decimal('0')
+        # Datos de la factura vinculada (SAVRecC/SAVRecPago)
+        result['factura_serie'] = row[6].strip() if row[6] else 'F'
+        result['factura_num_rec'] = row[7]
+        result['monto_pago'] = Decimal(str(row[8])) if row[8] else Decimal('0')
+        result['monto_factura'] = Decimal(str(row[9])) if row[9] else Decimal('0')
+        result['porc_iva'] = Decimal(str(row[10])) if row[10] else Decimal('0')
+        result['metodo_pago'] = row[11].strip() if row[11] else ''
+        result['rfc'] = row[12].strip() if row[12] else ''
+        result['tipo_proveedor'] = row[13].strip() if row[13] else ''
 
         # Obtener nombre del proveedor
         if result['proveedor']:
