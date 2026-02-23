@@ -413,6 +413,29 @@ para determinar cual es correcta.
 - **Siempre usar el venv** para ejecutar tests y scripts (el Python del sistema no tiene las dependencias)
 - Driver ODBC en Mac: `msodbcsql17` instalado via `brew install microsoft/mssql-release/msodbcsql17`
 
+### Servidor Windows (SERVERMC)
+
+El servidor tiene Python MSYS2 (`C:\msys64\mingw64\`) que usan los otros agentes. **No usar MSYS2 para Agente5** porque:
+- No tiene wheels binarios en PyPI (numpy, pandas, pyodbc fallan)
+- SSL roto impide compilar desde source (cmake no descarga)
+- `--trusted-host` y `--only-binary` no resuelven
+
+**Solucion**: Instalar Python 3.12 de python.org en paralelo, **sin agregar al PATH**:
+1. Descargar `python-3.12.10-amd64.exe` de python.org (ultima version con instalador Windows)
+2. Instalar sin "Add to PATH" ni "Use admin privileges"
+3. Se instala en `C:\Users\Administrador\AppData\Local\Programs\Python\Python312\`
+4. Crear venv con ruta completa:
+```powershell
+cd C:\Tools\Agente5
+& "C:\Users\Administrador\AppData\Local\Programs\Python\Python312\python.exe" -m venv venv
+.\venv\Scripts\activate
+pip install -r requirements.txt
+```
+5. Los otros agentes siguen usando MSYS2 sin afectarse
+6. El venv usa `Scripts\` (no `bin\` como MSYS2)
+
+**App Streamlit**: `.\venv\Scripts\activate` y luego `streamlit run app.py`, o doble clic en `iniciar.bat`
+
 ## Conexion a Base de Datos
 
 | Contexto | Host | Driver |
