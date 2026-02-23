@@ -61,6 +61,8 @@ PERCEPCIONES_CUENTAS = {
     'AGUINALDO': ('6200', '030000'),
     'BONO ASISTENCIA': ('6200', '780000'),
     'BONO DE ASISTENCIA': ('6200', '780000'),
+    'DIA FESTIVO': ('6200', '810000'),
+    'DIAS FESTIVOS': ('6200', '810000'),
 }
 
 # Mapeo de deducciones: concepto → (cuenta, subcuenta)
@@ -94,6 +96,8 @@ PERCEPCIONES_PDF = {
     'AGUINALDO': ('6200', '030000'),
     'BONO DE ASISTENCIA': ('6200', '780000'),
     'BONO ASISTENCIA': ('6200', '780000'),
+    'DIA FESTIVO': ('6200', '810000'),
+    'DIAS FESTIVOS': ('6200', '810000'),
     'GRATIFICACIONES': ('6200', '260000'),
     'INDEMNIZACIONES': ('6200', '270000'),
 }

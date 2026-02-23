@@ -491,7 +491,7 @@ def render_sidebar():
 
         # Selector de periodo
         hoy = date.today()
-        anio = st.number_input("Anio", min_value=2024, max_value=2030, value=hoy.year)
+        anio = st.number_input("Año", min_value=2024, max_value=2030, value=hoy.year)
         mes = st.number_input("Mes", min_value=1, max_value=12, value=hoy.month)
         periodo = f"{anio}-{mes:02d}"
 
@@ -571,7 +571,6 @@ def render_tab_archivos():
                 for archivo in archivos_subidos:
                     ruta = guardar_archivo_subido(periodo, cat, archivo)
                     st.success(f"Guardado: {ruta.name}")
-                st.rerun()
 
     # --- Ajustes de impuestos (formulario) ---
     st.divider()
