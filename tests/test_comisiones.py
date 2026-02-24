@@ -154,7 +154,7 @@ class TestProcesadorComisiones:
         assert compra.subtotal == Decimal('6.00')
         assert compra.iva == Decimal('0.96')
         assert compra.total == Decimal('6.96')
-        assert compra.factura == '03022026'  # DDMMAAAA
+        assert compra.factura == '03022026F'  # DDMMAAAAF para SPEI
         assert compra.fecha == date(2026, 2, 3)
 
     def test_poliza_4_lineas(self):

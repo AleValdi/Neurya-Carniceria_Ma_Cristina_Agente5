@@ -113,7 +113,14 @@ class ProcesadorComisiones:
 
             # --- SAVCheqPM (egreso tipo 3) ---
             # NumFactura vacio — en produccion es NULL para comisiones
+            # Factura: DDMMAAAA para TDC, DDMMAAAAF para SPEI (patron produccion)
             factura_ref = fecha.strftime('%d%m%Y')
+            es_spei = any(
+                m.tipo_proceso in (TipoProceso.COMISION_SPEI, TipoProceso.COMISION_SPEI_IVA)
+                for m in movs_cuenta
+            )
+            if es_spei:
+                factura_ref += 'F'
             datos_pm = DatosMovimientoPM(
                 banco=cfg.banco,
                 cuenta=cuenta,
