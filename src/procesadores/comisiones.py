@@ -45,6 +45,7 @@ TIPO_MOVIMIENTO = 3  # Egreso con Factura
 PROVEEDOR_BANCO = '001081'
 NOMBRE_PROVEEDOR = 'BANCO REGIONAL'
 TIPO_PROVEEDOR = 'NA'
+RFC_BANCO = 'BRM940216EQ6'
 
 
 class ProcesadorComisiones:
@@ -141,6 +142,14 @@ class ProcesadorComisiones:
                 proveedor=PROVEEDOR_BANCO,
                 proveedor_nombre=NOMBRE_PROVEEDOR,
                 tipo_proveedor=TIPO_PROVEEDOR,
+                cheque_para=NOMBRE_PROVEEDOR,
+                pago_afectado=True,
+                num_pagos=1,
+                fecha_cheque_cobrado=fecha,
+                valor_pagado_tasa15=subtotal,
+                valor_pagado_imp_tasa15=iva,
+                estatus='Afectado',
+                rfc=RFC_BANCO,
             )
             plan.movimientos_pm.append(datos_pm)
 

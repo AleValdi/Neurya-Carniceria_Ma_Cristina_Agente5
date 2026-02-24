@@ -269,6 +269,15 @@ class DatosMovimientoPM:
     proveedor_nombre: str = ''               # 'BANCO REGIONAL'
     tipo_proveedor: str = ''                 # 'NA'
     num_cheque: str = ''                     # Numero de cheque (ej: '7632')
+    # Campos adicionales (comisiones / pagos afectados)
+    cheque_para: str = ''                    # 'BANCO REGIONAL' (nombre beneficiario)
+    pago_afectado: bool = False              # true cuando el pago ya fue procesado
+    num_pagos: int = 0                       # Numero de pagos vinculados
+    fecha_cheque_cobrado: Optional[date] = None  # Fecha del movimiento (para comisiones = fecha)
+    valor_pagado_tasa15: Decimal = Decimal('0')  # Subtotal (sin IVA)
+    valor_pagado_imp_tasa15: Decimal = Decimal('0')  # IVA
+    estatus: str = ''                        # 'Afectado' para comisiones
+    rfc: str = ''                            # RFC del proveedor/beneficiario
     # Campos que se asignan al ejecutar
     folio: Optional[int] = None
     num_poliza: Optional[int] = None

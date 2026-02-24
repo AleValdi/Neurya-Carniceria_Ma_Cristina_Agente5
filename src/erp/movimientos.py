@@ -42,11 +42,15 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             Cia, Fuente, Oficina, CuentaOficina,
             TipoPoliza, NumPoliza,
             Capturo, Sucursal, Saldo,
-            FechaAlta, HoraAlta, FechaMov,
+            FechaAlta, HoraAlta, FechaMov, UltimoCambio,
             NumFactura,
             Referencia, Referencia2, TotalLetra,
             Proveedor, ProveedorNombre, TipoProveedor,
-            NumCheque
+            NumCheque,
+            ConciliadaCapturo, ChequePara,
+            PagoAfectado, NumPagos, FechaChequeCobrado,
+            ValorPagadoTasa15, ValorPagadoImpTasa15,
+            Estatus, RFC
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
@@ -54,11 +58,15 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             ?, ?, ?, ?,
             ?, ?,
             ?, ?, ?,
-            ?, ?, ?,
+            ?, ?, ?, ?,
             ?,
             ?, ?, ?,
             ?, ?, ?,
-            ?
+            ?,
+            ?, ?,
+            ?, ?, ?,
+            ?, ?,
+            ?, ?
         )
     """, (
         datos.banco,
@@ -90,6 +98,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         ahora,
         hora_alta,
         fecha_mov,
+        ahora,                              # UltimoCambio = FechaAlta
         datos.num_factura,
         datos.referencia,
         datos.referencia2,
@@ -98,6 +107,15 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         datos.proveedor_nombre or '',
         datos.tipo_proveedor or '',
         datos.num_cheque,
+        'AGENTE5' if datos.conciliada else '',  # ConciliadaCapturo
+        datos.cheque_para,
+        datos.pago_afectado,
+        datos.num_pagos,
+        datos.fecha_cheque_cobrado,
+        datos.valor_pagado_tasa15,
+        datos.valor_pagado_imp_tasa15,
+        datos.estatus,
+        datos.rfc,
     ))
 
     logger.debug(
