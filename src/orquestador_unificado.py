@@ -5,6 +5,7 @@ A diferencia de las funciones individuales procesar_X() en orquestador.py
 UNA sola vez, y retorna un ResultadoLinea por cada linea del estado de cuenta.
 """
 
+import re
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
@@ -243,8 +244,11 @@ def _procesar_dia(
     # 4. Ventas Efectivo
     _procesar_ventas_efectivo(por_tipo, indice, fecha, cortes, connector, dry_run)
 
-    # 5. Nomina
+    # 5. Nomina (solo dispersion)
     _procesar_nomina(por_tipo, indice, fecha, datos_nomina, connector, dry_run)
+
+    # 5.5 Cobros de cheque (secundarios de nomina: cheques, finiquito, etc.)
+    _procesar_cobros_cheque(por_tipo, indice, fecha, datos_nomina, connector, dry_run)
 
     # 6. Conciliaciones (pagos + cobros)
     # Pagos a proveedores se afectan con 1 dia de retraso (dia anterior)
@@ -835,11 +839,10 @@ def _procesar_nomina(
 ):
     """Procesa nomina del dia con percepciones/deducciones del Excel CONTPAQi.
 
-    Usa ProcesadorNomina para generar hasta 4 movimientos:
-    1. Dispersion (transferencias): poliza ~19 lineas
-    2. Cheques (efectivo): poliza 2 lineas
-    3. Vacaciones pagadas: poliza 2 lineas
-    4. Finiquito: poliza 2 lineas
+    Solo crea el movimiento de DISPERSION (es_principal=True) con poliza ~17
+    lineas que provisiona acreedores (2120/040000) para secundarios.
+    Los secundarios (cheques, finiquito, vacaciones) se crean en
+    _procesar_cobros_cheque() cuando aparecen en el estado de cuenta.
     """
     movs = por_tipo.get(TipoProceso.NOMINA, [])
     if not movs:
@@ -871,7 +874,7 @@ def _procesar_nomina(
         for mov in movs:
             rl = indice[id(mov)]
             rl.accion = AccionLinea.INSERT
-            rl.nota = f"DRY-RUN | NOMINA ({len(plan.movimientos_pm)} movimientos)"
+            rl.nota = "DRY-RUN | NOMINA DISPERSION"
         return
 
     resultado = _ejecutar_plan(plan, connector)
@@ -882,7 +885,82 @@ def _procesar_nomina(
             rl.accion = AccionLinea.INSERT
             rl.resultado = resultado
             rl.folios = resultado.folios
-            rl.nota = f"NOMINA ({len(plan.movimientos_pm)} movimientos ERP)"
+            rl.nota = "NOMINA DISPERSION"
+        else:
+            rl.accion = AccionLinea.ERROR
+            rl.nota = resultado.error
+
+
+_RE_NUM_CHEQUE = re.compile(r'cheque:0*(\d+)', re.IGNORECASE)
+
+
+def _procesar_cobros_cheque(
+    por_tipo: Dict[TipoProceso, List[MovimientoBancario]],
+    indice: Dict[int, ResultadoLinea],
+    fecha: date,
+    datos_nomina: Optional[DatosNomina],
+    connector: Optional[SAV7Connector],
+    dry_run: bool,
+):
+    """Procesa cobros de cheque del dia.
+
+    Si hay datos de nomina CONTPAQi, intenta matchear el monto del cobro
+    contra movimientos secundarios del Excel (CHEQUES, FINIQUITO, VACACIONES).
+    Los que matchean se registran como movimientos de nomina con poliza 2 lineas
+    (cancela acreedores 2120/040000).
+    Los que NO matchean quedan como DESCONOCIDO (no son de nomina).
+    """
+    movs = por_tipo.get(TipoProceso.COBRO_CHEQUE, [])
+    if not movs:
+        return
+
+    logger.info("  Cobros de cheque: {} movimientos", len(movs))
+
+    procesador = ProcesadorNomina()
+
+    for mov in movs:
+        rl = indice[id(mov)]
+
+        # Extraer numero de cheque de la descripcion
+        m = _RE_NUM_CHEQUE.search(mov.descripcion)
+        num_cheque = m.group(1) if m else ''
+
+        # Sin datos de nomina → no podemos determinar si es de nomina
+        if datos_nomina is None:
+            rl.accion = AccionLinea.DESCONOCIDO
+            rl.nota = "Sin archivo de nomina — no se puede clasificar cobro de cheque"
+            continue
+
+        plan = procesador.construir_plan_cheque(
+            fecha=fecha,
+            datos_nomina=datos_nomina,
+            monto_banco=mov.monto,
+            num_cheque=num_cheque,
+        )
+
+        if plan is None:
+            # Monto no matchea ningun secundario de nomina
+            rl.accion = AccionLinea.DESCONOCIDO
+            rl.nota = (
+                f"Cobro cheque #{num_cheque} ${mov.monto:,.2f} "
+                f"sin match en Excel nomina"
+            )
+            continue
+
+        if dry_run:
+            rl.accion = AccionLinea.INSERT
+            rl.nota = (
+                f"DRY-RUN | {plan.descripcion} "
+                f"(cheque #{num_cheque})"
+            )
+            continue
+
+        resultado = _ejecutar_plan(plan, connector)
+        if resultado.exito:
+            rl.accion = AccionLinea.INSERT
+            rl.resultado = resultado
+            rl.folios = resultado.folios
+            rl.nota = f"{plan.descripcion} (cheque #{num_cheque})"
         else:
             rl.accion = AccionLinea.ERROR
             rl.nota = resultado.error

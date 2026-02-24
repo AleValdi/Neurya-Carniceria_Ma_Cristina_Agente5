@@ -26,6 +26,7 @@ class TipoProceso(str, Enum):
     COMISION_TDC = 'COMISION_TDC'
     COMISION_TDC_IVA = 'COMISION_TDC_IVA'
     NOMINA = 'NOMINA'
+    COBRO_CHEQUE = 'COBRO_CHEQUE'
     PAGO_PROVEEDOR = 'PAGO_PROVEEDOR'
     COBRO_CLIENTE = 'COBRO_CLIENTE'
     IMPUESTO_FEDERAL = 'IMPUESTO_FEDERAL'
@@ -132,6 +133,7 @@ class MovimientoNomina:
     clase: str = 'NOMINA'               # 'NOMINA' o 'FINIQUITO'
     tipo_egreso: str = 'TRANSFERENCIA'  # 'TRANSFERENCIA' o 'CHEQUE'
     es_principal: bool = False          # True solo para DISPERSION (recibe poliza completa)
+    matched: bool = False               # True cuando ya se creo el movimiento secundario
 
 
 @dataclass
@@ -266,6 +268,7 @@ class DatosMovimientoPM:
     proveedor: str = ''                      # Clave proveedor (ej: '001081' para comisiones)
     proveedor_nombre: str = ''               # 'BANCO REGIONAL'
     tipo_proveedor: str = ''                 # 'NA'
+    num_cheque: str = ''                     # Numero de cheque (ej: '7632')
     # Campos que se asignan al ejecutar
     folio: Optional[int] = None
     num_poliza: Optional[int] = None

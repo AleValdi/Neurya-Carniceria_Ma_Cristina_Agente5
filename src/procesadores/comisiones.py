@@ -112,6 +112,7 @@ class ProcesadorComisiones:
             concepto = f"COMISIONES BANCARIAS {fecha.strftime('%d/%m/%Y')}"
 
             # --- SAVCheqPM (egreso tipo 3) ---
+            # NumFactura vacio — en produccion es NULL para comisiones
             factura_ref = fecha.strftime('%d%m%Y')
             datos_pm = DatosMovimientoPM(
                 banco=cfg.banco,
@@ -129,7 +130,7 @@ class ProcesadorComisiones:
                 conciliada=1,
                 paridad=Decimal('1.0000'),
                 tipo_poliza='EGRESO',
-                num_factura=factura_ref,
+                num_factura='',
                 proveedor=PROVEEDOR_BANCO,
                 proveedor_nombre=NOMBRE_PROVEEDOR,
                 tipo_proveedor=TIPO_PROVEEDOR,

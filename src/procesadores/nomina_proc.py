@@ -1,18 +1,22 @@
 """Procesador E2: Nomina.
 
-Genera N movimientos bancarios para el pago de nomina, descubiertos
-dinamicamente del Excel CONTPAQi:
-- DISPERSION (transferencias): Tipo 2, Clase NOMINA, TipoEgreso=TRANSFERENCIA
-- CHEQUES (efectivo): Tipo 2, Clase NOMINA, TipoEgreso=CHEQUE
-- VAC PAGADAS, FINIQUITO PAGADO, u otros segun columna O del Excel
+Genera movimientos bancarios para pago de nomina en DOS fases:
 
-Poliza principal (primer movimiento es_principal=True): ~19 lineas
+Fase 1 — Linea "NOMINA - PAGO DE NOMINA" del banco:
+  construir_plan() crea solo la DISPERSION (poliza ~17 lineas con provision
+  de acreedores 2120/040000 para secundarios).
+
+Fase 2 — Lineas "Cobro de cheque:XXXX" del banco:
+  construir_plan_cheque() matchea monto contra secundarios del Excel y crea
+  1 movimiento + poliza 2 lineas (cancela acreedores).
+
+Poliza principal (DISPERSION): ~19 lineas
   - Cargos: percepciones (cuentas 6200/XXXXXX)
   - Abonos: deducciones (cuentas 2140/XXXXXX)
   - Abono Banco (1120/040000) = monto dispersion
   - Abono Acreedores Nomina (2120/040000) = suma de secundarios
 
-Polizas secundarias: 2 lineas c/u
+Polizas secundarias (CHEQUES, VAC, FINIQUITO): 2 lineas c/u
   - Cargo Acreedores Nomina (2120/040000)
   - Abono Banco (1120/040000)
 """
@@ -41,6 +45,7 @@ CUENTA_EFECTIVO = '055003730017'
 TIPO_MOVIMIENTO = 2  # Egreso manual
 CLASE_NOMINA = 'NOMINA'
 CLASE_FINIQUITO = 'FINIQUITO'
+TOLERANCIA_MATCH = Decimal('0.50')
 
 
 class ProcesadorNomina:
@@ -58,7 +63,10 @@ class ProcesadorNomina:
         datos_nomina: Optional[DatosNomina] = None,
         **kwargs,
     ) -> PlanEjecucion:
-        """Construye plan para pago de nomina.
+        """Construye plan para la DISPERSION de nomina.
+
+        Solo crea el movimiento principal (es_principal=True) con poliza
+        completa que provisiona acreedores para los secundarios.
 
         Args:
             movimientos: Movimiento(s) de nomina del estado de cuenta.
@@ -85,11 +93,12 @@ class ProcesadorNomina:
         num_nomina = datos_nomina.numero_nomina
         concepto_base = f"NOMINA {num_nomina:02d}"
 
-        # Iterar sobre movimientos descubiertos dinamicamente
-        poliza_principal_generada = False
+        # Monto del banco para validacion cruzada
+        monto_banco = movimientos[0].monto if movimientos else Decimal('0')
 
+        # Solo crear movimiento principal (DISPERSION)
         for mov_nom in datos_nomina.movimientos:
-            if mov_nom.monto <= 0:
+            if not mov_nom.es_principal or mov_nom.monto <= 0:
                 continue
 
             concepto_mov = f"{concepto_base} {mov_nom.tipo}"
@@ -102,25 +111,26 @@ class ProcesadorNomina:
                 tipo_egreso=mov_nom.tipo_egreso,
             )
 
-            if mov_nom.es_principal and not poliza_principal_generada:
-                # Poliza completa: percepciones + deducciones + banco + acreedores
-                lineas = _generar_poliza_principal(
-                    datos_nomina=datos_nomina,
-                    concepto=concepto_base,
+            lineas = _generar_poliza_principal(
+                datos_nomina=datos_nomina,
+                concepto=concepto_base,
+            )
+            plan.lineas_poliza.extend(lineas)
+            plan.facturas_por_movimiento.append(0)
+            plan.lineas_por_movimiento.append(len(lineas))
+
+            # Validacion cruzada: monto Excel vs monto banco
+            diff = abs(mov_nom.monto - monto_banco)
+            if diff > Decimal('1.00'):
+                plan.advertencias.append(
+                    f"Diferencia banco vs Excel: "
+                    f"banco=${monto_banco:,.2f}, "
+                    f"Excel=${mov_nom.monto:,.2f} "
+                    f"(diff=${diff:,.2f}). "
+                    f"Se registro con monto del Excel."
                 )
-                plan.lineas_poliza.extend(lineas)
-                plan.facturas_por_movimiento.append(0)
-                plan.lineas_por_movimiento.append(len(lineas))
-                poliza_principal_generada = True
-            else:
-                # Poliza secundaria: 2 lineas (Acreedores + Banco)
-                lineas = _generar_poliza_secundaria(
-                    monto=mov_nom.monto,
-                    concepto=concepto_mov,
-                )
-                plan.lineas_poliza.extend(lineas)
-                plan.facturas_por_movimiento.append(0)
-                plan.lineas_por_movimiento.append(2)
+
+            break  # Solo hay 1 principal
 
         # Validaciones
         for mov_nom in datos_nomina.movimientos:
@@ -143,6 +153,82 @@ class ProcesadorNomina:
                 "Sin detalle de percepciones (poliza tendra lineas genericas)"
             )
 
+        if datos_nomina.total_secundarios > 0:
+            plan.validaciones.append(
+                f"Provision acreedores: ${datos_nomina.total_secundarios:,.2f} "
+                f"(pendiente de cobros de cheque)"
+            )
+
+        return plan
+
+    def construir_plan_cheque(
+        self,
+        fecha: date,
+        datos_nomina: DatosNomina,
+        monto_banco: Decimal,
+        num_cheque: str = '',
+    ) -> Optional[PlanEjecucion]:
+        """Busca un movimiento secundario que matchee el monto del cobro de cheque.
+
+        Args:
+            fecha: Fecha del cobro de cheque en el estado de cuenta.
+            datos_nomina: Datos parseados del archivo de nomina CONTPAQi.
+            monto_banco: Monto del egreso en el banco.
+            num_cheque: Numero de cheque extraido de la descripcion bancaria.
+
+        Returns:
+            PlanEjecucion con 1 movimiento + 2 lineas poliza, o None si no hay match.
+        """
+        num_nomina = datos_nomina.numero_nomina
+        concepto_base = f"NOMINA {num_nomina:02d}"
+
+        # Buscar primer secundario no matcheado con monto similar
+        mov_match = None
+        for mov_nom in datos_nomina.movimientos:
+            if mov_nom.es_principal or mov_nom.matched:
+                continue
+            if mov_nom.monto <= 0:
+                continue
+            if abs(mov_nom.monto - monto_banco) <= TOLERANCIA_MATCH:
+                mov_match = mov_nom
+                break
+
+        if mov_match is None:
+            return None
+
+        # Marcar como matcheado para no reutilizar
+        mov_match.matched = True
+
+        concepto_mov = f"{concepto_base} {mov_match.tipo}"
+
+        plan = PlanEjecucion(
+            tipo_proceso='NOMINA_CHEQUE',
+            descripcion=f'Cobro cheque nomina {fecha} ({mov_match.tipo})',
+            fecha_movimiento=fecha,
+        )
+
+        _agregar_movimiento_nomina(
+            plan, fecha,
+            monto=monto_banco,
+            concepto=concepto_mov,
+            clase=mov_match.clase,
+            tipo_egreso=mov_match.tipo_egreso,
+            num_cheque=num_cheque,
+        )
+
+        lineas = _generar_poliza_secundaria(
+            monto=monto_banco,
+            concepto=concepto_mov,
+        )
+        plan.lineas_poliza.extend(lineas)
+        plan.facturas_por_movimiento.append(0)
+        plan.lineas_por_movimiento.append(2)
+
+        plan.validaciones.append(
+            f"Match: {mov_match.tipo} ${mov_match.monto:,.2f} "
+            f"↔ banco ${monto_banco:,.2f} (cheque #{num_cheque})"
+        )
+
         return plan
 
 
@@ -153,6 +239,7 @@ def _agregar_movimiento_nomina(
     concepto: str,
     clase: str,
     tipo_egreso: str,
+    num_cheque: str = '',
 ):
     """Agrega un movimiento de nomina al plan."""
     datos_pm = DatosMovimientoPM(
@@ -172,6 +259,7 @@ def _agregar_movimiento_nomina(
         paridad=Decimal('1.0000'),
         tipo_poliza='EGRESO',
         num_factura='',
+        num_cheque=num_cheque,
     )
     plan.movimientos_pm.append(datos_pm)
 

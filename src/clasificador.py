@@ -66,6 +66,13 @@ PATRONES: List[Tuple[re.Pattern, TipoProceso, Optional[str], Optional[bool]]] = 
         '038900320016', None,
     ),
 
+    # --- Cobros de cheque (nomina, proveedores, etc.) ---
+    (
+        re.compile(r'Cobro de cheque', re.IGNORECASE),
+        TipoProceso.COBRO_CHEQUE,
+        '055003730017', None,
+    ),
+
     # --- Nomina ---
     (
         re.compile(r'NOMINA.*PAGO DE NOMINA', re.IGNORECASE),

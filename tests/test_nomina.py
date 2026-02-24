@@ -1,4 +1,9 @@
-"""Tests para el procesador de Nomina (E2)."""
+"""Tests para el procesador de Nomina (E2).
+
+construir_plan() solo crea la DISPERSION (1 movimiento, poliza ~17 lineas).
+construir_plan_cheque() crea movimientos secundarios (cheques, finiquito, etc.)
+a partir de lineas "Cobro de cheque" del estado de cuenta.
+"""
 
 from datetime import date
 from decimal import Decimal
@@ -68,11 +73,11 @@ def _datos_nomina_simple() -> DatosNomina:
     )
 
 
-class TestProcesadorNomina:
-    """Tests del procesador sin conexion a BD."""
+class TestDispersion:
+    """Tests para construir_plan() — solo DISPERSION."""
 
-    def test_genera_4_movimientos(self):
-        """Con todos los componentes, genera 4 movimientos."""
+    def test_genera_1_movimiento_dispersion(self):
+        """Con todos los componentes, genera solo 1 movimiento (dispersion)."""
         from src.procesadores.nomina_proc import ProcesadorNomina
 
         procesador = ProcesadorNomina()
@@ -84,25 +89,12 @@ class TestProcesadorNomina:
             datos_nomina=datos,
         )
 
-        assert len(plan.movimientos_pm) == 4
-
-        # 1. Dispersion
+        assert len(plan.movimientos_pm) == 1
         assert plan.movimientos_pm[0].egreso == Decimal('117992.20')
         assert plan.movimientos_pm[0].tipo_egreso == 'TRANSFERENCIA'
         assert plan.movimientos_pm[0].clase == 'NOMINA'
 
-        # 2. Cheques
-        assert plan.movimientos_pm[1].egreso == Decimal('24980.60')
-        assert plan.movimientos_pm[1].tipo_egreso == 'CHEQUE'
-
-        # 3. Vacaciones
-        assert plan.movimientos_pm[2].egreso == Decimal('3905.20')
-
-        # 4. Finiquito
-        assert plan.movimientos_pm[3].egreso == Decimal('3344.40')
-        assert plan.movimientos_pm[3].clase == 'FINIQUITO'
-
-    def test_solo_dispersion(self):
+    def test_solo_dispersion_simple(self):
         """Con solo dispersion, genera 1 movimiento."""
         from src.procesadores.nomina_proc import ProcesadorNomina
 
@@ -131,16 +123,14 @@ class TestProcesadorNomina:
             datos_nomina=datos,
         )
 
-        # Poliza principal: percepciones (8) + deducciones (5) + banco + acreedores = 15+
         lineas_principales = plan.lineas_por_movimiento[0]
         assert lineas_principales >= 10
 
-        # Verificar que hay cargos 6200
         cargos_6200 = [
             l for l in plan.lineas_poliza[:lineas_principales]
             if l.cuenta == '6200' and l.tipo_ca == TipoCA.CARGO
         ]
-        assert len(cargos_6200) >= 8  # 8 percepciones + posible cuadre
+        assert len(cargos_6200) >= 8
 
     def test_poliza_principal_tiene_deducciones(self):
         """Poliza principal incluye abonos por deducciones."""
@@ -157,14 +147,13 @@ class TestProcesadorNomina:
 
         lineas_principales = plan.lineas_por_movimiento[0]
 
-        # Verificar abonos 2140 (deducciones)
         abonos_2140 = [
             l for l in plan.lineas_poliza[:lineas_principales]
             if l.cuenta == '2140' and l.tipo_ca == TipoCA.ABONO
         ]
         assert len(abonos_2140) == 5
 
-    def test_poliza_principal_tiene_banco_y_acreedores(self):
+    def test_dispersion_provisiona_acreedores(self):
         """Poliza principal incluye abono banco y abono acreedores."""
         from src.procesadores.nomina_proc import ProcesadorNomina
 
@@ -196,24 +185,6 @@ class TestProcesadorNomina:
         assert len(abonos_acreedores) == 1
         esperado = Decimal('24980.60') + Decimal('3905.20') + Decimal('3344.40')
         assert abonos_acreedores[0].abono == esperado
-
-    def test_poliza_secundaria_2_lineas(self):
-        """Polizas secundarias tienen 2 lineas (Cargo Acreedores + Abono Banco)."""
-        from src.procesadores.nomina_proc import ProcesadorNomina
-
-        procesador = ProcesadorNomina()
-        datos = _datos_nomina_completa()
-
-        plan = procesador.construir_plan(
-            movimientos=[_mov_nomina()],
-            fecha=date(2026, 2, 7),
-            datos_nomina=datos,
-        )
-
-        # Movimientos 2, 3, 4 → polizas de 2 lineas cada una
-        assert plan.lineas_por_movimiento[1] == 2  # Cheques
-        assert plan.lineas_por_movimiento[2] == 2  # Vacaciones
-        assert plan.lineas_por_movimiento[3] == 2  # Finiquito
 
     def test_tracking_facturas_siempre_cero(self):
         """Nomina no tiene facturas PMF."""
@@ -260,3 +231,151 @@ class TestProcesadorNomina:
         )
 
         assert 'NOMINA 03' in plan.movimientos_pm[0].concepto
+
+
+class TestCobroCheque:
+    """Tests para construir_plan_cheque() — movimientos secundarios."""
+
+    def test_cheque_match_por_monto(self):
+        """construir_plan_cheque matchea secundario por monto."""
+        from src.procesadores.nomina_proc import ProcesadorNomina
+
+        procesador = ProcesadorNomina()
+        datos = _datos_nomina_completa()
+
+        plan = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('24980.60'),
+            num_cheque='7632',
+        )
+
+        assert plan is not None
+        assert len(plan.movimientos_pm) == 1
+        assert plan.movimientos_pm[0].egreso == Decimal('24980.60')
+        assert plan.movimientos_pm[0].clase == 'NOMINA'
+        assert plan.movimientos_pm[0].tipo_egreso == 'CHEQUE'
+        assert plan.movimientos_pm[0].num_cheque == '7632'
+
+    def test_cheque_poliza_2_lineas(self):
+        """Poliza secundaria tiene 2 lineas: Cargo 2120 + Abono 1120."""
+        from src.procesadores.nomina_proc import ProcesadorNomina
+
+        procesador = ProcesadorNomina()
+        datos = _datos_nomina_completa()
+
+        plan = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('3905.20'),  # VAC PAGADAS
+            num_cheque='7633',
+        )
+
+        assert plan is not None
+        assert len(plan.lineas_poliza) == 2
+        assert plan.lineas_por_movimiento == [2]
+
+        # Linea 1: Cargo Acreedores (2120/040000)
+        assert plan.lineas_poliza[0].cuenta == '2120'
+        assert plan.lineas_poliza[0].subcuenta == '040000'
+        assert plan.lineas_poliza[0].tipo_ca == TipoCA.CARGO
+        assert plan.lineas_poliza[0].cargo == Decimal('3905.20')
+
+        # Linea 2: Abono Banco (1120/040000)
+        assert plan.lineas_poliza[1].cuenta == '1120'
+        assert plan.lineas_poliza[1].subcuenta == '040000'
+        assert plan.lineas_poliza[1].tipo_ca == TipoCA.ABONO
+        assert plan.lineas_poliza[1].abono == Decimal('3905.20')
+
+    def test_cheque_sin_match_retorna_none(self):
+        """Monto desconocido retorna None."""
+        from src.procesadores.nomina_proc import ProcesadorNomina
+
+        procesador = ProcesadorNomina()
+        datos = _datos_nomina_completa()
+
+        plan = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('99999.99'),  # No matchea nada
+            num_cheque='0000',
+        )
+
+        assert plan is None
+
+    def test_cheque_no_repite_match(self):
+        """Segundo cobro mismo monto no re-matchea el mismo secundario."""
+        from src.procesadores.nomina_proc import ProcesadorNomina
+
+        procesador = ProcesadorNomina()
+        datos = _datos_nomina_completa()
+
+        # Primer cobro: matchea CHEQUES $24,980.60
+        plan1 = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('24980.60'),
+            num_cheque='7632',
+        )
+        assert plan1 is not None
+
+        # Segundo cobro: mismo monto, ya no hay secundario disponible
+        plan2 = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('24980.60'),
+            num_cheque='7634',
+        )
+        assert plan2 is None
+
+    def test_cheque_match_finiquito(self):
+        """Matchea finiquito con clase FINIQUITO."""
+        from src.procesadores.nomina_proc import ProcesadorNomina
+
+        procesador = ProcesadorNomina()
+        datos = _datos_nomina_completa()
+
+        plan = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('3344.40'),
+            num_cheque='7635',
+        )
+
+        assert plan is not None
+        assert plan.movimientos_pm[0].clase == 'FINIQUITO'
+
+    def test_cheque_tolerancia_centavos(self):
+        """Matchea con tolerancia de $0.50."""
+        from src.procesadores.nomina_proc import ProcesadorNomina
+
+        procesador = ProcesadorNomina()
+        datos = _datos_nomina_completa()
+
+        # Monto con diferencia de $0.30 (dentro de tolerancia $0.50)
+        plan = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('24980.30'),
+            num_cheque='7632',
+        )
+
+        assert plan is not None
+        assert plan.movimientos_pm[0].egreso == Decimal('24980.30')
+
+    def test_cheque_no_matchea_principal(self):
+        """No matchea el movimiento principal (dispersion)."""
+        from src.procesadores.nomina_proc import ProcesadorNomina
+
+        procesador = ProcesadorNomina()
+        datos = _datos_nomina_completa()
+
+        # Monto exacto de la dispersion — no debe matchear
+        plan = procesador.construir_plan_cheque(
+            fecha=date(2026, 2, 13),
+            datos_nomina=datos,
+            monto_banco=Decimal('117992.20'),
+            num_cheque='0000',
+        )
+
+        assert plan is None

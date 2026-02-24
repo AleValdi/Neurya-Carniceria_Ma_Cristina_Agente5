@@ -87,6 +87,13 @@ class TestClasificador:
         clasificar_movimientos(movs)
         assert movs[0].tipo_proceso == TipoProceso.COMISION_TDC_IVA
 
+    def test_cobro_cheque(self):
+        from src.clasificador import clasificar_movimientos
+
+        movs = [_crear_mov('Cobro de cheque:0000000007632_0007632', '055003730017', cargo=24980.60)]
+        clasificar_movimientos(movs)
+        assert movs[0].tipo_proceso == TipoProceso.COBRO_CHEQUE
+
     def test_nomina(self):
         from src.clasificador import clasificar_movimientos
 

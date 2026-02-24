@@ -45,7 +45,8 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             FechaAlta, HoraAlta, FechaMov,
             NumFactura,
             Referencia, Referencia2, TotalLetra,
-            Proveedor, ProveedorNombre, TipoProveedor
+            Proveedor, ProveedorNombre, TipoProveedor,
+            NumCheque
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
@@ -56,7 +57,8 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             ?, ?, ?,
             ?,
             ?, ?, ?,
-            ?, ?, ?
+            ?, ?, ?,
+            ?
         )
     """, (
         datos.banco,
@@ -95,6 +97,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         datos.proveedor or '',
         datos.proveedor_nombre or '',
         datos.tipo_proveedor or '',
+        datos.num_cheque,
     ))
 
     logger.debug(

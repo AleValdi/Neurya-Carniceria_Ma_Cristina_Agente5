@@ -138,7 +138,7 @@ def _buscar_cobro_en_bd(
     monto: Decimal,
     fecha: date,
     cuenta_banco: str,
-    tolerancia_dias: int = 2,
+    tolerancia_dias: int = 0,
     tolerancia_monto: Decimal = Decimal('0.01'),
 ) -> Optional[Dict]:
     """Busca un cobro no conciliado en SAVCheqPM que coincida.

@@ -139,7 +139,7 @@ def _buscar_pago_en_bd(
     monto: Decimal,
     fecha: date,
     cuenta_banco: str,
-    tolerancia_dias: int = 2,
+    tolerancia_dias: int = 0,
     tolerancia_monto: Decimal = Decimal('0.01'),
 ) -> Optional[Dict]:
     """Busca un pago no conciliado en SAVCheqPM que coincida.

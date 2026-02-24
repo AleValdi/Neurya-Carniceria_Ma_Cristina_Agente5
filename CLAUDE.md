@@ -25,7 +25,9 @@ Los movimientos que ya existen se marcan como conciliados; los que no, se crean 
 | 4. Diseno solucion | ✅ Completada | Procesadores + orquestador unificado |
 | 5. Implementacion | ✅ Completada | 245 tests, demo funcional Feb 3 |
 | 5.5 Comparacion vs produccion | ✅ Completada | Ver "Diferencias Conocidas vs Produccion" |
+| 5.6 Bugs prueba usuario (Feb 24) | ✅ Diagnosticado | 2 corregidos, 2 no son bug de codigo. Ver `docs/BUGS_PRUEBA_20260224.md` |
 | 6. Hardening / file watcher | ⏳ Pendiente | — |
+| 7. Acceso remoto Streamlit | ⏳ Pendiente | Cambio ya aplicado en `iniciar.bat` (`--server.address 0.0.0.0`). Falta abrir puerto 8501 en firewall Windows y probar. |
 
 ---
 
@@ -511,12 +513,12 @@ Agente5/
 │   │   ├── traspasos.py         # E4: Traspasos entre cuentas
 │   │   ├── conciliacion_pagos.py # E1: Conciliacion pagos proveedor
 │   │   ├── conciliacion_cobros.py # I3: Conciliacion cobros clientes
-│   │   ├── nomina_proc.py       # E2: (legacy, ya no se usa directamente)
+│   │   ├── nomina_proc.py       # E2: Nomina (dispersion + cobros cheque)
 │   │   └── impuestos.py         # E5: Impuestos federales/estatales/IMSS
 │   └── reports/
 │       └── reporte_demo.py      # Genera Excel con comparacion vs produccion
 ├── demo.py                      # Entry point: --limpiar, --solo-fecha, --dry-run
-├── tests/                       # 245 tests unitarios + 2 e2e
+├── tests/                       # 266 tests unitarios + 2 e2e
 ├── data/
 │   └── reportes/
 │       ├── PRUEBA.xlsx          # Estado de cuenta bancario (Feb 2026)
@@ -524,6 +526,36 @@ Agente5/
 │       └── DEMO_REPORTE.xlsx    # Reporte generado (comparacion vs PROD)
 └── logs/
 ```
+
+---
+
+## Bugs Corregidos y Lecciones (Prueba Feb 24 2026)
+
+Detalle completo en `docs/BUGS_PRUEBA_20260224.md`.
+
+### Corregidos en codigo
+
+1. **SAVCheqPM.NumFactura en comisiones** — Produccion usa NULL, AGENTE5 ponia la fecha
+   como string (ej: "23022026"). Corregido: `num_factura=''` en `comisiones.py:132`.
+
+2. **Conciliacion con tolerancia ±2 dias** — `_buscar_pago_en_bd()` y `_buscar_cobro_en_bd()`
+   buscaban movimientos ±2 dias, pudiendo conciliar registros de fechas no procesadas.
+   Corregido: `tolerancia_dias=0` (match por fecha exacta).
+
+### No son bug de codigo (datos de entrada)
+
+3. **Comisiones cuenta 17 faltantes** — El archivo del EdoCta estaba incompleto al ejecutar
+   el run "completo" (solo tenia datos parciales hasta Feb 16). La normalizacion de mojibake
+   (`fix_mojibake()` en `normalizacion.py`) funciona correctamente — el regex matchea bien.
+   **Leccion:** Verificar que el archivo del EdoCta tiene TODOS los datos antes de ejecutar.
+
+4. **TDC cero registros** — Dos causas:
+   - Run "completo": tesoreria no fue encontrada (`cortes = {}`). El archivo existia pero
+     no estaba en el path esperado (`02_Tesoreria/entrada/`).
+   - Runs "solo Feb 23" (lunes): Multi-corte falla porque los depositos combinados del banco
+     no suman exactamente a los cortes de tesoreria ($201.89 gap en $952K totales).
+   **Leccion:** La UI debe validar que todos los archivos requeridos existen antes de ejecutar.
+   El algoritmo multi-corte para lunes con depositos combinados es una limitacion conocida.
 
 ---
 
