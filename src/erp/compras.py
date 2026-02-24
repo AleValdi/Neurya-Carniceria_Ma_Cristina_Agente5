@@ -9,7 +9,10 @@ from typing import Optional
 
 from loguru import logger
 
+from src.erp.utils import numero_a_letra
 from src.models import DatosCompraPM
+
+RFC_BANCO = 'BRM940216EQ6'
 
 
 def insertar_factura_compra(
@@ -36,13 +39,22 @@ def insertar_factura_compra(
         num_rec = _siguiente_num_rec(cursor, serie)
 
     ahora = datetime.now()
+    total_letra = numero_a_letra(datos.total)
+    # Patron produccion: {RFC}_REC_F{NumRec:06d}_{YYYYMMDD}
+    factura_electronica = (
+        f"{RFC_BANCO}_REC_{serie}{num_rec:06d}_{datos.fecha.strftime('%Y%m%d')}"
+    )
 
     # INSERT SAVRecC (encabezado)
     cursor.execute("""
         INSERT INTO SAVRecC (
             Serie, NumRec, Proveedor, ProveedorNombre,
-            Fecha, SubTotal1, Iva, Total, Saldo,
-            Factura, Estatus, Comprador,
+            Fecha, FacturaFecha, FechaAlta, UltimoCambio,
+            SubTotal1, SubTotal2, Iva, Total, Saldo,
+            Factura, FacturaElectronica,
+            Estatus, Procesada, Tipo,
+            Comprador, Capturo, CapturoCambio,
+            TotalLetra,
             Consolidacion, Consolida,
             Articulos, Partidas,
             Paridad, Moneda, MetododePago,
@@ -50,8 +62,12 @@ def insertar_factura_compra(
             RFC, TipoRecepcion, Referencia
         ) VALUES (
             ?, ?, ?, ?,
+            ?, ?, ?, ?,
             ?, ?, ?, ?, ?,
+            ?, ?,
             ?, ?, ?,
+            ?, ?, ?,
+            ?,
             ?, ?,
             ?, ?,
             ?, ?, ?,
@@ -63,30 +79,40 @@ def insertar_factura_compra(
         num_rec,
         datos.proveedor,
         'BANCO REGIONAL',
-        datos.fecha,
-        datos.subtotal,
+        datos.fecha,                # Fecha
+        datos.fecha,                # FacturaFecha = Fecha
+        ahora,                      # FechaAlta
+        ahora,                      # UltimoCambio
+        datos.subtotal,             # SubTotal1
+        datos.subtotal,             # SubTotal2 = SubTotal1
         datos.iva,
         datos.total,
-        Decimal('0'),       # Saldo = 0 (pagada inmediata)
-        datos.factura,      # Referencia factura (DDMMAAAA)
-        'No Pagada',        # Estatus inicial
-        'AGENTE5',          # Comprador
-        0,                  # Consolidacion
-        0,                  # Consolida
-        1,                  # Articulos (1 concepto: comision)
-        1,                  # Partidas (1 linea de detalle)
-        Decimal('20.00'),   # Paridad
-        'PESOS',            # Moneda
-        'PUE',              # MetododePago
-        5,                  # Sucursal
-        0,                  # NumOC
-        'BRM940216EQ6',     # RFC (del proveedor BANCO REGIONAL)
-        'COMISIONES BANCARIAS',  # TipoRecepcion (tipo de documento)
-        'CREDITO',          # Referencia
+        Decimal('0'),               # Saldo = 0 (pagada inmediata)
+        datos.factura,              # Factura (DDMMAAAA o DDMMAAAAF)
+        factura_electronica,        # FacturaElectronica
+        'Tot.Pagada',               # Estatus (como produccion)
+        1,                          # Procesada = true (como produccion)
+        'Crédito',                  # Tipo (como produccion)
+        'AGENTE5',                  # Comprador
+        'AGENTE5',                  # Capturo
+        'AGENTE5',                  # CapturoCambio
+        total_letra,                # TotalLetra
+        0,                          # Consolidacion
+        0,                          # Consolida
+        1,                          # Articulos (1 concepto: comision)
+        1,                          # Partidas (1 linea de detalle)
+        Decimal('20.00'),           # Paridad
+        'PESOS',                    # Moneda
+        'PUE',                      # MetododePago
+        5,                          # Sucursal
+        0,                          # NumOC
+        RFC_BANCO,                  # RFC
+        'COMISIONES BANCARIAS',     # TipoRecepcion
+        'CREDITO',                  # Referencia
     ))
 
     logger.debug(
-        "INSERT SAVRecC: Serie={}, NumRec={}, Total=${:,.2f}",
+        "INSERT SAVRecC: Serie={}, NumRec={}, Total=${:,.2f}, Estatus=Tot.Pagada",
         serie, num_rec, datos.total,
     )
 
