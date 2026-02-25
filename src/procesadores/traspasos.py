@@ -167,6 +167,7 @@ class ProcesadorTraspasos:
                 paridad=Decimal('1.0000'),
                 tipo_poliza='DIARIO',
                 num_factura='',
+                paridad_dof=None,
                 referencia='TRASPASO AUTOMATICO',
             )
             plan.movimientos_pm.append(datos_ingreso)

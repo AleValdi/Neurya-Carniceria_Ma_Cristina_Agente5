@@ -84,7 +84,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         datos.tipo_egreso,
         datos.conciliada,
         datos.paridad,
-        Decimal('20.0000'),  # ParidadDOF
+        datos.paridad_dof,
         'PESOS',
         'DCM',
         'SAV7-CHEQUES',
@@ -107,7 +107,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         datos.proveedor_nombre or '',
         datos.tipo_proveedor or '',
         datos.num_cheque,
-        'AGENTE5' if datos.conciliada else '',  # ConciliadaCapturo
+        'AGENTE5' if datos.conciliada else None,  # ConciliadaCapturo
         datos.cheque_para,
         datos.pago_afectado,
         datos.num_pagos,

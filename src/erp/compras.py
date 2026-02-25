@@ -39,7 +39,11 @@ def insertar_factura_compra(
         num_rec = _siguiente_num_rec(cursor, serie)
 
     ahora = datetime.now()
-    total_letra = numero_a_letra(datos.total)
+    # HoraAlta/UltimoCambioHora: base 1899-12-30 + hora del dia (patron ERP)
+    hora_base = datetime(1899, 12, 30, ahora.hour, ahora.minute, ahora.second)
+    # TotalLetra en SAVRecC: sin parentesis (a diferencia de SAVCheqPM)
+    total_letra_raw = numero_a_letra(datos.total)
+    total_letra = total_letra_raw.removeprefix('( ').removesuffix(' )')
     # Patron produccion: {RFC}_REC_F{NumRec:06d}_{YYYYMMDD}
     factura_electronica = (
         f"{RFC_BANCO}_REC_{serie}{num_rec:06d}_{datos.fecha.strftime('%Y%m%d')}"
@@ -50,27 +54,35 @@ def insertar_factura_compra(
         INSERT INTO SAVRecC (
             Serie, NumRec, Proveedor, ProveedorNombre,
             Fecha, FacturaFecha, FechaAlta, UltimoCambio,
-            SubTotal1, SubTotal2, Iva, Total, Saldo,
-            Factura, FacturaElectronica,
+            FechaAltaHora, UltimoCambioHora,
+            SubTotal1, SubTotal2, Iva, Total, Saldo, Pagado,
+            Factura, FacturaElectronica, FacturaElectronicaTotal,
             Estatus, Procesada, Tipo,
+            ProcesadaFecha, ProcesadaHora,
             Comprador, Capturo, CapturoCambio,
-            TotalLetra,
+            TotalLetra, TotalRecibidoNeto,
             Consolidacion, Consolida,
-            Articulos, Partidas,
+            Articulos, Partidas, PartidasMovInv,
             Paridad, Moneda, MetododePago,
             Sucursal, NumOC,
-            RFC, TipoRecepcion, Referencia
+            RFC, SerieRFC,
+            TipoRecepcion, Referencia,
+            Ciudad, Estado, TipoProveedor
         ) VALUES (
             ?, ?, ?, ?,
             ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
+            ?, ?,
+            ?, ?, ?, ?, ?, ?,
+            ?, ?, ?,
+            ?, ?, ?,
+            ?, ?,
+            ?, ?, ?,
+            ?, ?,
             ?, ?,
             ?, ?, ?,
             ?, ?, ?,
-            ?,
             ?, ?,
             ?, ?,
-            ?, ?, ?,
             ?, ?,
             ?, ?, ?
         )
@@ -83,32 +95,44 @@ def insertar_factura_compra(
         datos.fecha,                # FacturaFecha = Fecha
         ahora,                      # FechaAlta
         ahora,                      # UltimoCambio
+        hora_base,                  # FechaAltaHora (1899-12-30 + hora)
+        hora_base,                  # UltimoCambioHora
         datos.subtotal,             # SubTotal1
         datos.subtotal,             # SubTotal2 = SubTotal1
         datos.iva,
         datos.total,
         Decimal('0'),               # Saldo = 0 (pagada inmediata)
+        datos.total,                # Pagado = Total (Tot.Pagada)
         datos.factura,              # Factura (DDMMAAAA o DDMMAAAAF)
         factura_electronica,        # FacturaElectronica
+        Decimal('0'),               # FacturaElectronicaTotal
         'Tot.Pagada',               # Estatus (como produccion)
         1,                          # Procesada = true (como produccion)
         'Crédito',                  # Tipo (como produccion)
+        ahora,                      # ProcesadaFecha
+        hora_base,                  # ProcesadaHora
         'AGENTE5',                  # Comprador
         'AGENTE5',                  # Capturo
         'AGENTE5',                  # CapturoCambio
-        total_letra,                # TotalLetra
+        total_letra,                # TotalLetra (sin parentesis)
+        datos.total,                # TotalRecibidoNeto = Total
         0,                          # Consolidacion
         0,                          # Consolida
         1,                          # Articulos (1 concepto: comision)
         1,                          # Partidas (1 linea de detalle)
+        1,                          # PartidasMovInv = Partidas
         Decimal('20.00'),           # Paridad
         'PESOS',                    # Moneda
         'PUE',                      # MetododePago
         5,                          # Sucursal
         0,                          # NumOC
         RFC_BANCO,                  # RFC
+        'DCM02072238A',             # SerieRFC (RFC de la empresa)
         'COMISIONES BANCARIAS',     # TipoRecepcion
         'CREDITO',                  # Referencia
+        'MONTERREY',                # Ciudad (proveedor 001081)
+        'NUEVO LEON',               # Estado (proveedor 001081)
+        'NA',                       # TipoProveedor (como produccion)
     ))
 
     logger.debug(
