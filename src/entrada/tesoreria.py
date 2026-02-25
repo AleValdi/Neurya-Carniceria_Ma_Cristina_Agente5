@@ -2,7 +2,7 @@
 
 Lee archivos como 'FEBRERO INGRESOS 2026.xlsx' que contienen una hoja
 por dia del mes. Estructura esperada por hoja:
-  - J18: Fecha del corte (autoritativa, NO usar E3)
+  - J18: Fecha del corte (autoritativa, NO usar E3). Fallback: numero de hoja = dia
   - G19:G43 + H19:H43: Facturas individuales (numero + importe)
   - K19 o K20: Numero de factura global (posicion variable!)
   - L20: Importe de factura global
@@ -33,31 +33,39 @@ def parsear_tesoreria(ruta: Path) -> Dict[date, CorteVentaDiaria]:
 
     Returns:
         Dict con clave = fecha del corte, valor = CorteVentaDiaria.
-        Solo incluye hojas que tienen datos (fecha valida en J18).
+        Solo incluye hojas que tienen datos. Usa J18 como fecha; si falta,
+        usa el numero de hoja como dia del mes (Hoja 1 = Dia 1).
     """
     logger.info("Parseando reporte de tesoreria: {}", ruta.name)
     wb = openpyxl.load_workbook(str(ruta), data_only=True, read_only=False)
 
     resultado: Dict[date, CorteVentaDiaria] = {}
+    hojas_sin_fecha: List[tuple] = []  # (indice, nombre_hoja, worksheet)
 
-    for nombre_hoja in wb.sheetnames:
+    for idx, nombre_hoja in enumerate(wb.sheetnames):
         ws = wb[nombre_hoja]
         corte = _parsear_hoja_diaria(ws, nombre_hoja)
 
         if corte is not None and _tiene_datos(corte):
             resultado[corte.fecha_corte] = corte
-            n_ind = len(corte.facturas_individuales)
-            logger.info(
-                "Hoja '{}': corte {} | {} fact.indiv | global={} ${} | "
-                "efectivo=${} | TDC=${}",
-                nombre_hoja,
-                corte.fecha_corte,
-                n_ind,
-                corte.factura_global_numero or '-',
-                corte.factura_global_importe or 0,
-                corte.total_efectivo or 0,
-                corte.total_tdc or 0,
-            )
+            _log_corte(nombre_hoja, corte)
+        elif corte is None:
+            # J18 sin fecha — guardar para fallback por numero de hoja
+            hojas_sin_fecha.append((idx, nombre_hoja, ws))
+
+    # Fallback: numero de hoja = dia del mes (Hoja 0 = Dia 1)
+    if hojas_sin_fecha and resultado:
+        fecha_ref = next(iter(resultado.values())).fecha_corte
+        for idx, nombre_hoja, ws in hojas_sin_fecha:
+            dia = idx + 1
+            try:
+                fecha_fallback = date(fecha_ref.year, fecha_ref.month, dia)
+            except ValueError:
+                continue  # dia invalido para el mes
+            corte = _parsear_hoja_diaria(ws, nombre_hoja, fecha_fallback)
+            if corte is not None and _tiene_datos(corte):
+                resultado[corte.fecha_corte] = corte
+                _log_corte(nombre_hoja, corte)
 
     wb.close()
 
@@ -68,14 +76,45 @@ def parsear_tesoreria(ruta: Path) -> Dict[date, CorteVentaDiaria]:
     return resultado
 
 
-def _parsear_hoja_diaria(ws, nombre_hoja: str) -> Optional[CorteVentaDiaria]:
-    """Parsea una hoja diaria del reporte de tesoreria."""
+def _log_corte(nombre_hoja: str, corte: CorteVentaDiaria):
+    """Logea informacion de un corte parseado."""
+    n_ind = len(corte.facturas_individuales)
+    logger.info(
+        "Hoja '{}': corte {} | {} fact.indiv | global={} ${} | "
+        "efectivo=${} | TDC=${}",
+        nombre_hoja,
+        corte.fecha_corte,
+        n_ind,
+        corte.factura_global_numero or '-',
+        corte.factura_global_importe or 0,
+        corte.total_efectivo or 0,
+        corte.total_tdc or 0,
+    )
 
-    # Fecha del corte: J18 (autoritativa)
+
+def _parsear_hoja_diaria(
+    ws, nombre_hoja: str, fecha_fallback: Optional[date] = None,
+) -> Optional[CorteVentaDiaria]:
+    """Parsea una hoja diaria del reporte de tesoreria.
+
+    Args:
+        ws: Worksheet de openpyxl.
+        nombre_hoja: Nombre de la hoja (para logs).
+        fecha_fallback: Fecha a usar si J18 no tiene fecha valida.
+            Se calcula como numero_de_hoja = dia_del_mes.
+    """
+    # Fecha del corte: J18 (autoritativa), fallback por numero de hoja
     fecha_corte = parsear_fecha_excel(_celda(ws, 'J', 18))
     if fecha_corte is None:
-        logger.debug("Hoja '{}': sin fecha en J18, saltando", nombre_hoja)
-        return None
+        if fecha_fallback is not None:
+            fecha_corte = fecha_fallback
+            logger.warning(
+                "Hoja '{}': sin fecha en J18, usando dia {} por numero de hoja",
+                nombre_hoja, fecha_fallback.day,
+            )
+        else:
+            logger.debug("Hoja '{}': sin fecha en J18, saltando", nombre_hoja)
+            return None
 
     corte = CorteVentaDiaria(
         fecha_corte=fecha_corte,
