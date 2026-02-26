@@ -14,7 +14,7 @@ import os
 import shutil
 import sys
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -24,7 +24,7 @@ from loguru import logger
 
 from config.settings import Settings
 from src.erp.sav7_connector import SAV7Connector
-from src.models import AccionLinea, ResultadoLinea
+from src.models import AccionLinea, ResultadoLinea, TipoProceso
 from src.orquestador_unificado import procesar_estado_cuenta
 from src.reports.reporte_demo import generar_reporte_estado_cuenta
 
@@ -379,9 +379,15 @@ def ejecutar_conciliacion(
 
     # Filtrar por fecha si aplica
     if solo_fecha:
+        fecha_ayer = solo_fecha - timedelta(days=1)
         resultados = [
             rl for rl in resultados
             if rl.movimiento.fecha == solo_fecha
+            or (
+                rl.movimiento.fecha == fecha_ayer
+                and rl.tipo_clasificado == TipoProceso.PAGO_PROVEEDOR
+                and rl.accion in (AccionLinea.CONCILIAR, AccionLinea.SIN_PROCESAR, AccionLinea.ERROR)
+            )
         ]
 
     # Generar reporte si no es dry-run
@@ -459,9 +465,13 @@ def mostrar_resumen_resultados(resultados: List[ResultadoLinea]):
     col5.metric("Errores", acciones.get(AccionLinea.ERROR, 0))
 
     # Tabla detallada
+    fecha_max = max(rl.movimiento.fecha for rl in resultados) if resultados else None
     filas = []
     for rl in resultados:
         mov = rl.movimiento
+        nota = rl.nota or ''
+        if fecha_max and mov.fecha < fecha_max and rl.tipo_clasificado == TipoProceso.PAGO_PROVEEDOR:
+            nota = f"[Dia anterior] {nota}" if nota else "[Dia anterior]"
         filas.append({
             'Fecha': mov.fecha.strftime('%d/%m/%Y'),
             'Cuenta': mov.cuenta_banco,
@@ -471,7 +481,7 @@ def mostrar_resumen_resultados(resultados: List[ResultadoLinea]):
             'Clasificacion': rl.tipo_clasificado.value,
             'Accion': rl.accion.value,
             'Folios': ', '.join(str(f) for f in rl.folios),
-            'Nota': rl.nota or '',
+            'Nota': nota,
         })
 
     st.dataframe(filas, use_container_width=True, height=400)
