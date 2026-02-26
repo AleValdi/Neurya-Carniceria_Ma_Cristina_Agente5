@@ -52,7 +52,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             ConciliadaCapturo, ChequePara,
             PagoAfectado, NumPagos, FechaChequeCobrado,
             ValorPagadoTasa15, ValorPagadoImpTasa15,
-            Estatus, RFC
+            Estatus, RFC, LeyendaEspecial
         ) VALUES (
             ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?,
@@ -68,7 +68,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
             ?, ?,
             ?, ?, ?,
             ?, ?,
-            ?, ?
+            ?, ?, ?
         )
     """, (
         datos.banco,
@@ -118,6 +118,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         datos.valor_pagado_imp_tasa15,
         datos.estatus,
         datos.rfc,
+        datos.leyenda_especial,
     ))
 
     logger.debug(

@@ -278,6 +278,7 @@ class DatosMovimientoPM:
     valor_pagado_imp_tasa15: Decimal = Decimal('0')  # IVA
     estatus: Optional[str] = None            # 'Afectado' para comisiones
     rfc: Optional[str] = None                # RFC del proveedor/beneficiario
+    leyenda_especial: Optional[str] = None   # 'PARA ABONO EN CUENTA DE BENEFICIARIO' (comisiones)
     # Campos que se asignan al ejecutar
     folio: Optional[int] = None
     num_poliza: Optional[int] = None

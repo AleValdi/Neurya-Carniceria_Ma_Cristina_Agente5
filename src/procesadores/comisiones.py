@@ -122,6 +122,8 @@ class ProcesadorComisiones:
             )
             if es_spei:
                 factura_ref += 'F'
+            # IVA sin redondear (4 decimales) para ValorPagadoImpTasa15
+            iva_exacto = subtotal * Decimal('0.16')
             datos_pm = DatosMovimientoPM(
                 banco=cfg.banco,
                 cuenta=cuenta,
@@ -148,9 +150,10 @@ class ProcesadorComisiones:
                 num_pagos=1,
                 fecha_cheque_cobrado=fecha,
                 valor_pagado_tasa15=subtotal,
-                valor_pagado_imp_tasa15=iva,
+                valor_pagado_imp_tasa15=iva_exacto,
                 estatus='Afectado',
                 rfc=RFC_BANCO,
+                leyenda_especial='PARA ABONO EN CUENTA DE BENEFICIARIO',
             )
             plan.movimientos_pm.append(datos_pm)
 
