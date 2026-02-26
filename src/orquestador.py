@@ -1516,42 +1516,57 @@ def _ejecutar_plan(
                 #    + SAVRecPago + SAVCheqPMP (vinculo movimiento ↔ factura)
                 if compra_idx < len(plan.compras):
                     datos_compra = plan.compras[compra_idx]
-                    num_rec = insertar_factura_compra(cursor, datos_compra)
+                    try:
+                        num_rec = insertar_factura_compra(cursor, datos_compra)
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"Error INSERT SAVRecC/RecD: {e}"
+                        ) from e
 
                     # Crear pago y detalle si tiene proveedor
                     if datos_pm.proveedor:
-                        pago = insertar_rec_pago(
-                            cursor,
-                            serie='F',
-                            num_rec=num_rec,
-                            proveedor=datos_pm.proveedor,
-                            proveedor_nombre=datos_pm.proveedor_nombre,
-                            fecha=datetime(
-                                datos_pm.age, datos_pm.mes, datos_pm.dia,
-                            ),
-                            monto=datos_compra.total,
-                            banco=datos_pm.banco,
-                            cuenta=datos_pm.cuenta,
-                            folio=folio,
-                            factura=datos_compra.factura,
-                        )
-                        insertar_cheq_pmp(
-                            cursor,
-                            banco=datos_pm.banco,
-                            cuenta=datos_pm.cuenta,
-                            age=datos_pm.age,
-                            mes=datos_pm.mes,
-                            folio=folio,
-                            num_rec=num_rec,
-                            pago=pago,
-                            fecha=datetime(
-                                datos_pm.age, datos_pm.mes, datos_pm.dia,
-                            ),
-                            monto=datos_compra.total,
-                            iva=datos_compra.iva,
-                            factura=datos_compra.factura,
-                            proveedor=datos_pm.proveedor,
-                        )
+                        try:
+                            pago = insertar_rec_pago(
+                                cursor,
+                                serie='F',
+                                num_rec=num_rec,
+                                proveedor=datos_pm.proveedor,
+                                proveedor_nombre=datos_pm.proveedor_nombre,
+                                fecha=datetime(
+                                    datos_pm.age, datos_pm.mes, datos_pm.dia,
+                                ),
+                                monto=datos_compra.total,
+                                banco=datos_pm.banco,
+                                cuenta=datos_pm.cuenta,
+                                folio=folio,
+                                factura=datos_compra.factura,
+                            )
+                        except Exception as e:
+                            raise RuntimeError(
+                                f"Error INSERT SAVRecPago: {e}"
+                            ) from e
+                        try:
+                            insertar_cheq_pmp(
+                                cursor,
+                                banco=datos_pm.banco,
+                                cuenta=datos_pm.cuenta,
+                                age=datos_pm.age,
+                                mes=datos_pm.mes,
+                                folio=folio,
+                                num_rec=num_rec,
+                                pago=pago,
+                                fecha=datetime(
+                                    datos_pm.age, datos_pm.mes, datos_pm.dia,
+                                ),
+                                monto=datos_compra.total,
+                                iva=datos_compra.iva,
+                                factura=datos_compra.factura,
+                                proveedor=datos_pm.proveedor,
+                            )
+                        except Exception as e:
+                            raise RuntimeError(
+                                f"Error INSERT SAVCheqPMP: {e}"
+                            ) from e
 
                     compra_idx += 1
 
@@ -1641,11 +1656,16 @@ def _ejecutar_conciliacion(
        UPDATE SAVRecPago SET Estatus='Pagado', FPago, Banco, Referencia...
        UPDATE SAVRecC SET Saldo=0, Estatus='Tot.Pagada'
     """
-    # Mapeo TipoEgreso (SAVCheqPM) → FPago (SAVRecPago)
+    # Mapeo TipoEgreso (SAVCheqPM) → FPago (SAVRecPago varchar(15))
     MAPA_FPAGO = {
         'TRANSFERENCIA': 'Transferencia',
+        'TRANSFERENCIA SPEI': 'Transferencia',
         'TARJETA': 'TARJETA',
+        'TARJETA DE CREDITO': 'TARJETA',
+        'INTERBANCARIO': 'Transferencia',
+        'EFECTIVO': 'Efectivo',
         'CHEQUE': 'Cheque',
+        'NA': 'NA',
     }
 
     try:
@@ -1697,7 +1717,7 @@ def _ejecutar_conciliacion(
                     cuenta_banco = conc.get('cuenta_banco', '')
                     tipo_egreso = conc.get('tipo_egreso', '')
                     banco_nombre = conc.get('banco_nombre', 'BANREGIO')
-                    fpago = MAPA_FPAGO.get(tipo_egreso, tipo_egreso)
+                    fpago = MAPA_FPAGO.get(tipo_egreso, tipo_egreso[:15])
                     referencia = f"{cuenta_banco}F: {folio}"
                     fecha_pago = plan.fecha_movimiento
 
