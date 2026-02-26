@@ -105,7 +105,9 @@ def procesar_ventas_tdc(
     procesador = ProcesadorVentaTDC()
     db_connector = _preparar_conexion(connector, dry_run)
 
-    for fecha_deposito in sorted(tdc_por_fecha.keys()):
+    fechas_deposito_tdc = sorted(tdc_por_fecha.keys())
+
+    for fecha_deposito in fechas_deposito_tdc:
         movs_dia = tdc_por_fecha[fecha_deposito]
         logger.info(
             "=== Procesando TDC {} ({} abonos) ===",
@@ -113,8 +115,10 @@ def procesar_ventas_tdc(
         )
 
         # Buscar cortes de venta correspondientes
-        # TDC: depositos aparecen el siguiente dia habil
-        cortes_matching = _buscar_cortes_tdc(fecha_deposito, cortes)
+        # Rango dinamico: cortes entre deposito anterior y actual
+        cortes_matching = _buscar_cortes_tdc(
+            fecha_deposito, cortes, fechas_deposito_tdc,
+        )
 
         if not cortes_matching:
             logger.warning(
@@ -800,46 +804,83 @@ def procesar_impuestos(
 def _buscar_cortes_tdc(
     fecha_deposito: date,
     cortes: Dict[date, CorteVentaDiaria],
+    fechas_deposito_tdc: Optional[List[date]] = None,
 ) -> List[CorteVentaDiaria]:
     """Busca cortes de venta correspondientes a un dia de deposito TDC.
 
-    Las ventas TDC se depositan el siguiente dia habil. Esto significa:
-    - Lun-Jue: deposito al dia siguiente
-    - Viernes: deposito el lunes (junto con sabado y domingo)
-    - Sabado: deposito el lunes
-    - Domingo: deposito el lunes
+    Las ventas TDC se depositan el siguiente dia habil bancario.
+    Para determinar que cortes corresponden a un deposito, se usa el rango
+    entre la fecha del deposito TDC anterior y la fecha actual:
 
-    Para un lunes, retorna hasta 3 cortes (viernes + sabado + domingo).
-    Para otros dias, retorna 1 corte (dia anterior).
+        cortes para D[i] = tesoreria con fechas en [D[i-1], D[i])
+
+    Esto maneja automaticamente fines de semana Y dias inhabiles bancarios
+    sin necesidad de un calendario de festivos.
+
+    Args:
+        fecha_deposito: Fecha del deposito en el estado de cuenta.
+        cortes: Dict fecha → CorteVentaDiaria de tesoreria.
+        fechas_deposito_tdc: Lista ordenada de TODAS las fechas con depositos
+            TDC/TDD en el estado de cuenta. Si no se proporciona, usa
+            fallback por dia de la semana (solo maneja fines de semana).
     """
-    resultado = []
+    if fechas_deposito_tdc:
+        return _buscar_cortes_por_rango(fecha_deposito, cortes, fechas_deposito_tdc)
 
-    # Dia de la semana del deposito (0=Lun, 6=Dom)
+    # Fallback: logica simple por dia de la semana (sin soporte festivos)
     dia_semana = fecha_deposito.weekday()
-
     if dia_semana == 0:
-        # Lunes: depositos de viernes(3), sabado(2), domingo(1)
+        # Lunes: viernes + sabado + domingo
+        resultado = []
         for delta in (3, 2, 1):
             candidata = fecha_deposito - timedelta(days=delta)
             if candidata in cortes:
                 resultado.append(cortes[candidata])
-    elif dia_semana == 1:
-        # Martes: si el banco no proceso el lunes (ej: festivo o demora),
-        # domingo(-2) y lunes(-1) se depositan juntos el martes
-        for delta in (2, 1):
-            candidata = fecha_deposito - timedelta(days=delta)
-            if candidata in cortes:
-                resultado.append(cortes[candidata])
+        return resultado
     else:
-        # Mie-Dom: deposito del dia anterior
-        # Buscar dia-1, dia-2 (por si hubo festivo), mismo dia
-        for delta in (1, 2, 0, 3):
-            candidata = fecha_deposito - timedelta(days=delta)
-            if candidata in cortes:
-                resultado.append(cortes[candidata])
-                break  # Solo 1 corte para dias entre semana
+        # Otros dias: dia anterior
+        candidata = fecha_deposito - timedelta(days=1)
+        if candidata in cortes:
+            return [cortes[candidata]]
+        return []
 
-    return resultado
+
+def _buscar_cortes_por_rango(
+    fecha_deposito: date,
+    cortes: Dict[date, CorteVentaDiaria],
+    fechas_deposito_tdc: List[date],
+) -> List[CorteVentaDiaria]:
+    """Busca cortes en el rango [deposito_anterior, deposito_actual).
+
+    Para deposito D[i], los cortes son todas las fechas de tesoreria
+    entre D[i-1] (inclusive) y D[i] (exclusive). Esto cubre:
+    - Dias normales: 1 corte (dia anterior)
+    - Fines de semana: 2-3 cortes
+    - Festivos bancarios: N cortes acumulados
+    """
+    fechas_sorted = sorted(fechas_deposito_tdc)
+
+    try:
+        idx = fechas_sorted.index(fecha_deposito)
+    except ValueError:
+        return []
+
+    if idx == 0:
+        # Primer deposito del periodo: buscar hasta 7 dias atras
+        inicio = fecha_deposito - timedelta(days=7)
+    else:
+        inicio = fechas_sorted[idx - 1]
+
+    fin = fecha_deposito - timedelta(days=1)
+
+    resultado = []
+    current = inicio
+    while current <= fin:
+        if current in cortes:
+            resultado.append(cortes[current])
+        current += timedelta(days=1)
+
+    return sorted(resultado, key=lambda c: c.fecha_corte)
 
 
 def _buscar_corte_efectivo(
@@ -1138,6 +1179,102 @@ def _buscar_combinacion(
             return list(combo)
 
     return None
+
+
+def _asignar_secuencial_con_split(
+    depositos: List[MovimientoBancario],
+    cortes_con_target: List['CorteVentaDiaria'],
+    tolerancia: Decimal = Decimal('2.00'),
+) -> Tuple[
+    List[Tuple['CorteVentaDiaria', List[MovimientoBancario]]],
+    List[MovimientoBancario],
+    Dict[int, int],
+]:
+    """Asigna depositos a cortes secuencialmente, partiendo depositos si necesario.
+
+    Replica la logica manual de las capturistas:
+    1. Tomar depositos en orden de aparicion en el estado de cuenta
+    2. Acumular hacia el target TDC del primer corte
+    3. Si un deposito excede el target restante, partirlo en dos
+    4. Pasar al siguiente corte con el remanente
+
+    Se usa como fallback cuando el backtracking exacto (_asignar_multi_corte)
+    no encuentra solucion — tipicamente cuando el banco combina depositos de
+    multiples cortes en una sola linea.
+
+    Args:
+        depositos: Depositos TDC/TDD en orden de aparicion.
+        cortes_con_target: Cortes con total_tdc > 0, ordenados por fecha.
+        tolerancia: Tolerancia en pesos para considerar un corte completado.
+
+    Returns:
+        Tupla (asignaciones, sobrantes, mapa_virtual):
+        - asignaciones: Lista de (corte, depositos_asignados).
+        - sobrantes: Depositos no asignados a ningun corte.
+        - mapa_virtual: Dict id(virtual) → id(original) para depositos split.
+    """
+    asignaciones = []
+    cola = list(depositos)
+    mapa_virtual: Dict[int, int] = {}
+
+    for corte in cortes_con_target:
+        target = corte.total_tdc
+        if target is None or target <= 0:
+            continue
+
+        asignados: List[MovimientoBancario] = []
+        acumulado = Decimal('0')
+
+        while cola and (target - acumulado) > tolerancia:
+            dep = cola.pop(0)
+            faltante = target - acumulado
+
+            if dep.monto <= faltante + tolerancia:
+                # Deposito cabe completo en este corte
+                asignados.append(dep)
+                acumulado += dep.monto
+            else:
+                # Deposito excede: partir
+                parte_1 = _clonar_deposito(dep, faltante)
+                asignados.append(parte_1)
+                acumulado += faltante
+
+                remanente = dep.monto - faltante
+                parte_2 = _clonar_deposito(dep, remanente)
+
+                # Rastrear origen real (encadenar si dep ya es virtual)
+                original_id = mapa_virtual.get(id(dep), id(dep))
+                mapa_virtual[id(parte_1)] = original_id
+                mapa_virtual[id(parte_2)] = original_id
+
+                cola.insert(0, parte_2)
+
+        if asignados:
+            asignaciones.append((corte, asignados))
+            logger.debug(
+                "Split secuencial: corte {} → {} deps (${:,.2f}), "
+                "target=${:,.2f}, diff=${:,.2f}",
+                corte.fecha_corte, len(asignados), acumulado,
+                target, abs(acumulado - target),
+            )
+
+    return asignaciones, cola, mapa_virtual
+
+
+def _clonar_deposito(
+    original: MovimientoBancario,
+    nuevo_monto: Decimal,
+) -> MovimientoBancario:
+    """Crea clon de un deposito con monto diferente (para split secuencial)."""
+    return MovimientoBancario(
+        fecha=original.fecha,
+        descripcion=original.descripcion,
+        cargo=nuevo_monto if original.es_egreso else None,
+        abono=nuevo_monto if original.es_ingreso else None,
+        cuenta_banco=original.cuenta_banco,
+        nombre_hoja=original.nombre_hoja,
+        tipo_proceso=original.tipo_proceso,
+    )
 
 
 # --- Helpers ---

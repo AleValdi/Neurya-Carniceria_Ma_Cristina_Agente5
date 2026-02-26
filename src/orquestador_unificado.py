@@ -52,6 +52,7 @@ from src.validacion import validar_venta_efectivo, validar_venta_tdc
 # Reutilizar helpers existentes del orquestador original
 from src.orquestador import (
     _asignar_multi_corte,
+    _asignar_secuencial_con_split,
     _buscar_corte_efectivo,
     _buscar_cortes_tdc,
     _ejecutar_cobro_completo,
@@ -239,7 +240,10 @@ def _procesar_dia(
     _procesar_comisiones(por_tipo, indice, fecha, connector, dry_run)
 
     # 3. Ventas TDC/TDD
-    _procesar_ventas_tdc(por_tipo, indice, fecha, cortes, connector, dry_run)
+    _procesar_ventas_tdc(
+        por_tipo, indice, fecha, cortes, connector, dry_run,
+        movs_por_fecha=movs_por_fecha,
+    )
 
     # 4. Ventas Efectivo
     _procesar_ventas_efectivo(por_tipo, indice, fecha, cortes, connector, dry_run)
@@ -395,6 +399,7 @@ def _procesar_ventas_tdc(
     cortes: Dict[date, CorteVentaDiaria],
     connector: Optional[SAV7Connector],
     dry_run: bool,
+    movs_por_fecha: Optional[Dict] = None,
 ):
     """Procesa ventas TDC/TDD del dia."""
     movs_tdc = por_tipo.get(TipoProceso.VENTA_TDC, [])
@@ -406,7 +411,18 @@ def _procesar_ventas_tdc(
 
     logger.info("  Ventas TDC/TDD: {} movimientos", len(movs))
 
-    cortes_matching = _buscar_cortes_tdc(fecha, cortes)
+    # Calcular todas las fechas con depositos TDC para rango dinamico
+    fechas_deposito_tdc = None
+    if movs_por_fecha:
+        fechas_deposito_tdc = sorted([
+            f for f, movs_f in movs_por_fecha.items()
+            if any(
+                m.tipo_proceso in (TipoProceso.VENTA_TDC, TipoProceso.VENTA_TDD)
+                for m in movs_f
+            )
+        ])
+
+    cortes_matching = _buscar_cortes_tdc(fecha, cortes, fechas_deposito_tdc)
     if not cortes_matching:
         logger.warning("  Sin cortes de venta para depositos del {}", fecha)
         for mov in movs:
@@ -628,8 +644,12 @@ def _procesar_tdc_multi_corte(
 ):
     """Procesa TDC cuando hay multiples cortes (ej: lunes con vie/sab/dom).
 
-    Usa asignacion simultanea: prueba combinaciones que satisfagan TODOS
-    los cortes a la vez, en lugar de asignar greedy corte por corte.
+    Fase 1: Backtracking exacto — busca subconjuntos de depositos que
+    sumen exactamente al target TDC de cada corte.
+
+    Fase 2 (fallback): Asignacion secuencial con split — replica la logica
+    manual de las capturistas: consume depositos en orden, y cuando un
+    deposito excede el target de un corte, lo parte en dos.
     """
     cortes_sorted = sorted(cortes_list, key=lambda c: c.fecha_corte)
 
@@ -640,8 +660,7 @@ def _procesar_tdc_multi_corte(
     ]
     targets = [c.total_tdc for c in cortes_con_target]
 
-    # Asignacion simultanea (backtracking) con match EXACTO.
-    # Tolerancia $0.01 solo para redondeo de centavos.
+    # --- Fase 1: Backtracking exacto ---
     TOL_EXACTA = Decimal('0.01')
     asignacion = _asignar_multi_corte(
         movimientos, targets, tolerancia=TOL_EXACTA,
@@ -665,93 +684,180 @@ def _procesar_tdc_multi_corte(
                 indice, connector, cursor, dry_run,
             )
 
+        # Sobrantes de Fase 1 → CAJA CHICA
         disponibles = [
             m for m in movimientos if id(m) not in depositos_asignados
         ]
-    else:
-        # Sin match exacto simultaneo: intentar corte por corte.
-        # Los que matcheen se procesan; los que no, se reportan.
-        logger.warning(
-            "  Multi-corte: sin match exacto simultaneo, intentando por corte",
+        for mov in disponibles:
+            _tdc_sobrante_a_caja_chica(
+                mov, fecha, indice, connector, dry_run,
+            )
+        return
+
+    # --- Fase 2: Asignacion secuencial con split ---
+    logger.warning(
+        "  Multi-corte: sin match exacto, usando asignacion secuencial con split",
+    )
+
+    asignacion_seq, sobrantes, mapa_virtual = _asignar_secuencial_con_split(
+        movimientos, cortes_con_target,
+    )
+
+    if not asignacion_seq:
+        for mov in movimientos:
+            rl = indice[id(mov)]
+            rl.accion = AccionLinea.REQUIERE_REVISION
+            rl.nota = "No se pudo asignar a ningun corte de tesoreria"
+        return
+
+    # Log resumen
+    total_asignado = sum(
+        sum(d.monto for d in deps) for _, deps in asignacion_seq
+    )
+    n_originales_split = len(set(mapa_virtual.values()))
+    logger.info(
+        "  Asignacion secuencial: {} cortes, ${:,.2f} asignado, "
+        "{} depositos partidos, {} sobrantes",
+        len(asignacion_seq), total_asignado,
+        n_originales_split, len(sobrantes),
+    )
+
+    originales_procesados = set()
+
+    for corte, deps in asignacion_seq:
+        logger.info(
+            "  Corte {}: {} deps (${:,.2f})",
+            corte.fecha_corte, len(deps), sum(d.monto for d in deps),
         )
-        depositos_asignados = set()
-        disponibles_iter = list(movimientos)
 
-        for corte in cortes_con_target:
-            subset = _encontrar_subset_por_suma(
-                disponibles_iter, corte.total_tdc, tolerancia=TOL_EXACTA,
-            )
-            if subset:
-                logger.info(
-                    "  Corte {} match exacto: {} deps (${:,.2f})",
-                    corte.fecha_corte, len(subset),
-                    sum(m.monto for m in subset),
-                )
-                for mov in subset:
-                    disponibles_iter.remove(mov)
-                    depositos_asignados.add(id(mov))
-                _procesar_tdc_un_corte(
-                    procesador, subset, fecha, corte,
-                    indice, connector, cursor, dry_run,
-                )
-            else:
-                # No hay subset exacto para este corte — posible deposito
-                # combinado del banco. Reportar para revision manual.
-                suma_disponible = sum(m.monto for m in disponibles_iter)
-                logger.warning(
-                    "  Corte {} SIN match exacto: target=${:,.2f}, "
-                    "{} deps disponibles (${:,.2f}). "
-                    "Posible deposito combinado del banco.",
-                    corte.fecha_corte, corte.total_tdc,
-                    len(disponibles_iter), suma_disponible,
-                )
+        plan = procesador.construir_plan(
+            movimientos=deps, fecha=fecha,
+            cursor=cursor, corte_venta=corte,
+        )
 
-        disponibles = [
-            m for m in movimientos if id(m) not in depositos_asignados
-        ]
+        if dry_run:
+            for dep in deps:
+                oid = mapa_virtual.get(id(dep), id(dep))
+                if oid in indice:
+                    rl = indice[oid]
+                    rl.accion = AccionLinea.INSERT
+                    nota = (
+                        f"DRY-RUN | Corte {corte.fecha_corte} "
+                        f"(${dep.monto:,.2f})"
+                    )
+                    rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
+                originales_procesados.add(oid)
+            continue
 
-    # Depositos sin asignar a ningun corte
-    for mov in disponibles:
-        rl = indice[id(mov)]
+        resultado = _ejecutar_plan(plan, connector)
 
-        if asignacion:
-            # El multi-corte fue exitoso: sobrantes van a CAJA CHICA
-            logger.info(
-                "  TDC sobrante → TRASPASO CAJA CHICA: ${:,.2f}",
-                mov.monto,
-            )
-
-            if dry_run:
-                rl.accion = AccionLinea.INSERT
-                rl.nota = "DRY-RUN | TRASPASO CAJA CHICA (sobrante TDC)"
+        for i, dep in enumerate(deps):
+            oid = mapa_virtual.get(id(dep), id(dep))
+            if oid not in indice:
                 continue
-
-            plan_traspaso = _construir_plan_traspaso_caja_chica(
-                mov, fecha, desde_caja_chica=True,
-            )
-            if plan_traspaso.advertencias:
-                rl.accion = AccionLinea.ERROR
-                rl.nota = plan_traspaso.advertencias[0]
-                continue
-
-            resultado = _ejecutar_plan(plan_traspaso, connector)
+            rl = indice[oid]
             if resultado.exito:
                 rl.accion = AccionLinea.INSERT
                 rl.resultado = resultado
-                rl.folios = resultado.folios
-                rl.nota = "TRASPASO CAJA CHICA (sobrante TDC)"
+                if i < len(resultado.folios):
+                    rl.folios.append(resultado.folios[i])
+                nota = f"Corte {corte.fecha_corte} ${dep.monto:,.2f}"
+                rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
             else:
                 rl.accion = AccionLinea.ERROR
                 rl.nota = resultado.error
-        else:
-            # Ningun corte tuvo match exacto simultaneo.
-            # Marcar depositos sin asignar como REQUIERE_REVISION.
-            rl.accion = AccionLinea.REQUIERE_REVISION
+            originales_procesados.add(oid)
+
+    # Sobrantes del split secuencial → CAJA CHICA
+    for dep in sobrantes:
+        oid = mapa_virtual.get(id(dep), id(dep))
+        if oid not in indice:
+            continue
+        rl = indice[oid]
+
+        logger.info(
+            "  TDC sobrante (split) → TRASPASO CAJA CHICA: ${:,.2f}",
+            dep.monto,
+        )
+
+        if dry_run:
+            nota = f"DRY-RUN | TRASPASO CAJA CHICA (${dep.monto:,.2f})"
+            rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
+            rl.accion = AccionLinea.INSERT
+            originales_procesados.add(oid)
+            continue
+
+        plan_traspaso = _construir_plan_traspaso_caja_chica(
+            dep, fecha, desde_caja_chica=True,
+        )
+        if plan_traspaso.advertencias:
+            rl.accion = AccionLinea.ERROR
             rl.nota = (
-                f"Deposito ${mov.monto:,.2f} sin match exacto a corte de "
-                f"tesoreria. Posible deposito combinado del banco — "
-                f"requiere separacion manual."
+                f"{rl.nota} | {plan_traspaso.advertencias[0]}"
+                if rl.nota else plan_traspaso.advertencias[0]
             )
+            originales_procesados.add(oid)
+            continue
+
+        resultado = _ejecutar_plan(plan_traspaso, connector)
+        if resultado.exito:
+            if rl.accion != AccionLinea.INSERT:
+                rl.accion = AccionLinea.INSERT
+            rl.folios.extend(resultado.folios)
+            nota = f"TRASPASO CAJA CHICA ${dep.monto:,.2f}"
+            rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
+        else:
+            rl.accion = AccionLinea.ERROR
+            rl.nota = (
+                f"{rl.nota} | ERROR: {resultado.error}"
+                if rl.nota else resultado.error
+            )
+        originales_procesados.add(oid)
+
+    # Depositos originales que no fueron asignados (no deberia ocurrir)
+    for mov in movimientos:
+        if id(mov) not in originales_procesados:
+            rl = indice[id(mov)]
+            rl.accion = AccionLinea.REQUIERE_REVISION
+            rl.nota = "No asignado en split secuencial"
+
+
+def _tdc_sobrante_a_caja_chica(
+    mov: MovimientoBancario,
+    fecha: date,
+    indice: Dict[int, ResultadoLinea],
+    connector: Optional[SAV7Connector],
+    dry_run: bool,
+):
+    """Registra un deposito TDC sobrante como TRASPASO a CAJA CHICA."""
+    rl = indice[id(mov)]
+    logger.info(
+        "  TDC sobrante → TRASPASO CAJA CHICA: ${:,.2f}",
+        mov.monto,
+    )
+
+    if dry_run:
+        rl.accion = AccionLinea.INSERT
+        rl.nota = "DRY-RUN | TRASPASO CAJA CHICA (sobrante TDC)"
+        return
+
+    plan_traspaso = _construir_plan_traspaso_caja_chica(
+        mov, fecha, desde_caja_chica=True,
+    )
+    if plan_traspaso.advertencias:
+        rl.accion = AccionLinea.ERROR
+        rl.nota = plan_traspaso.advertencias[0]
+        return
+
+    resultado = _ejecutar_plan(plan_traspaso, connector)
+    if resultado.exito:
+        rl.accion = AccionLinea.INSERT
+        rl.resultado = resultado
+        rl.folios = resultado.folios
+        rl.nota = "TRASPASO CAJA CHICA (sobrante TDC)"
+    else:
+        rl.accion = AccionLinea.ERROR
+        rl.nota = resultado.error
 
 
 def _en_borde_de_mes(fecha: date, margen: int = 4) -> bool:
