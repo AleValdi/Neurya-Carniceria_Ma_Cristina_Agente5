@@ -169,6 +169,7 @@ class CuentasContables:
     # Acreedores
     ACREEDORES_BANREGIO = ('2120', '020000')
     ACREEDORES_NOMINA = ('2120', '040000')
+    ACREEDORES_CLIENTES = ('2120', '070000')
 
     # Retenciones
     RETENCION_IMSS = ('2140', '010000')
@@ -223,6 +224,7 @@ NOMBRES_CUENTAS: Dict[tuple, str] = {
     # Acreedores
     ('2120', '020000'): 'ACREEDORES DIVERSOS BANREGIO',
     ('2120', '040000'): 'ACREEDORES DIVERSOS NOMINA',
+    ('2120', '070000'): 'ACREEDORES CLIENTES',
     # Retenciones / impuestos por pagar
     ('2140', '010000'): 'RETENCION I.M.S.S.',
     ('2140', '020000'): 'RETENCION I.S.P.T.',

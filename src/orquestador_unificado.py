@@ -25,7 +25,7 @@ from src.entrada.impuestos_pdf import (
     parsear_impuesto_federal,
 )
 from src.erp.sav7_connector import SAV7Connector
-from config.settings import CUENTAS_BANCARIAS, CUENTA_POR_NUMERO
+from config.settings import CUENTAS_BANCARIAS, CUENTA_POR_NUMERO, CuentasContables
 from src.models import (
     AccionLinea,
     CorteVentaDiaria,
@@ -632,6 +632,80 @@ def _construir_plan_traspaso_caja_chica(
     return plan
 
 
+def _construir_plan_ajuste_bancario(
+    mov: MovimientoBancario,
+    fecha: date,
+) -> PlanEjecucion:
+    """Construye plan de AJUSTE BANCARIO para sobrante TDC.
+
+    Patron PROD: 1 ingreso simple con Clase='AJUSTE BANCARIO'
+    + 2 lineas poliza (Cargo Banco + Abono Acreedores Clientes 2120/070000).
+    """
+    clave_cuenta = CUENTA_POR_NUMERO.get(mov.cuenta_banco)
+    cfg = CUENTAS_BANCARIAS.get(clave_cuenta) if clave_cuenta else None
+
+    plan = PlanEjecucion(
+        tipo_proceso='AJUSTE_BANCARIO',
+        descripcion=f'Ajuste bancario sobrante TDC {fecha}',
+        fecha_movimiento=fecha,
+    )
+
+    if not cfg:
+        plan.advertencias.append(f"Cuenta {mov.cuenta_banco} no reconocida")
+        return plan
+
+    concepto = 'AJUSTES DE INGRESOS PENDIENTES DE FACTURA'
+
+    datos_pm = DatosMovimientoPM(
+        banco=cfg.banco,
+        cuenta=mov.cuenta_banco,
+        age=fecha.year,
+        mes=fecha.month,
+        dia=fecha.day,
+        tipo=1,
+        ingreso=mov.monto,
+        egreso=Decimal('0'),
+        concepto=concepto,
+        clase='AJUSTE BANCARIO',
+        fpago='Tarjeta Credito',
+        tipo_egreso='NA',
+        conciliada=1,
+        paridad=Decimal('1.0000'),
+        tipo_poliza='INGRESO',
+        num_factura=None,
+    )
+    plan.movimientos_pm.append(datos_pm)
+
+    cta_banco = (cfg.cuenta_contable, cfg.subcuenta_contable)
+    cta_acreedores = CuentasContables.ACREEDORES_CLIENTES
+
+    plan.lineas_poliza.extend([
+        LineaPoliza(
+            movimiento=1,
+            cuenta=cta_banco[0],
+            subcuenta=cta_banco[1],
+            tipo_ca=TipoCA.CARGO,
+            cargo=mov.monto,
+            abono=Decimal('0'),
+            concepto=concepto,
+        ),
+        LineaPoliza(
+            movimiento=2,
+            cuenta=cta_acreedores[0],
+            subcuenta=cta_acreedores[1],
+            tipo_ca=TipoCA.ABONO,
+            cargo=Decimal('0'),
+            abono=mov.monto,
+            concepto=concepto,
+        ),
+    ])
+
+    plan.facturas_por_movimiento.append(0)
+    plan.lineas_por_movimiento.append(2)
+
+    return plan
+
+
 def _procesar_tdc_multi_corte(
     procesador: ProcesadorVentaTDC,
     movimientos: List[MovimientoBancario],
@@ -684,12 +758,12 @@ def _procesar_tdc_multi_corte(
                 indice, connector, cursor, dry_run,
             )
 
-        # Sobrantes de Fase 1 → CAJA CHICA
+        # Sobrantes de Fase 1 → AJUSTE BANCARIO
         disponibles = [
             m for m in movimientos if id(m) not in depositos_asignados
         ]
         for mov in disponibles:
-            _tdc_sobrante_a_caja_chica(
+            _tdc_sobrante_a_ajuste_bancario(
                 mov, fecha, indice, connector, dry_run,
             )
         return
@@ -768,7 +842,7 @@ def _procesar_tdc_multi_corte(
                 rl.nota = resultado.error
             originales_procesados.add(oid)
 
-    # Sobrantes del split secuencial → CAJA CHICA
+    # Sobrantes del split secuencial → AJUSTE BANCARIO
     for dep in sobrantes:
         oid = mapa_virtual.get(id(dep), id(dep))
         if oid not in indice:
@@ -776,35 +850,33 @@ def _procesar_tdc_multi_corte(
         rl = indice[oid]
 
         logger.info(
-            "  TDC sobrante (split) → TRASPASO CAJA CHICA: ${:,.2f}",
+            "  TDC sobrante (split) → AJUSTE BANCARIO: ${:,.2f}",
             dep.monto,
         )
 
         if dry_run:
-            nota = f"DRY-RUN | TRASPASO CAJA CHICA (${dep.monto:,.2f})"
+            nota = f"DRY-RUN | AJUSTE BANCARIO (${dep.monto:,.2f})"
             rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
             rl.accion = AccionLinea.INSERT
             originales_procesados.add(oid)
             continue
 
-        plan_traspaso = _construir_plan_traspaso_caja_chica(
-            dep, fecha, desde_caja_chica=True,
-        )
-        if plan_traspaso.advertencias:
+        plan = _construir_plan_ajuste_bancario(dep, fecha)
+        if plan.advertencias:
             rl.accion = AccionLinea.ERROR
             rl.nota = (
-                f"{rl.nota} | {plan_traspaso.advertencias[0]}"
-                if rl.nota else plan_traspaso.advertencias[0]
+                f"{rl.nota} | {plan.advertencias[0]}"
+                if rl.nota else plan.advertencias[0]
             )
             originales_procesados.add(oid)
             continue
 
-        resultado = _ejecutar_plan(plan_traspaso, connector)
+        resultado = _ejecutar_plan(plan, connector)
         if resultado.exito:
             if rl.accion != AccionLinea.INSERT:
                 rl.accion = AccionLinea.INSERT
             rl.folios.extend(resultado.folios)
-            nota = f"TRASPASO CAJA CHICA ${dep.monto:,.2f}"
+            nota = f"AJUSTE BANCARIO ${dep.monto:,.2f}"
             rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
         else:
             rl.accion = AccionLinea.ERROR
@@ -822,39 +894,41 @@ def _procesar_tdc_multi_corte(
             rl.nota = "No asignado en split secuencial"
 
 
-def _tdc_sobrante_a_caja_chica(
+def _tdc_sobrante_a_ajuste_bancario(
     mov: MovimientoBancario,
     fecha: date,
     indice: Dict[int, ResultadoLinea],
     connector: Optional[SAV7Connector],
     dry_run: bool,
 ):
-    """Registra un deposito TDC sobrante como TRASPASO a CAJA CHICA."""
+    """Registra un deposito TDC sobrante como AJUSTE BANCARIO.
+
+    Patron PROD: 1 ingreso simple + 2 lineas poliza
+    (Cargo Banco + Abono Acreedores Clientes).
+    """
     rl = indice[id(mov)]
     logger.info(
-        "  TDC sobrante → TRASPASO CAJA CHICA: ${:,.2f}",
+        "  TDC sobrante → AJUSTE BANCARIO: ${:,.2f}",
         mov.monto,
     )
 
     if dry_run:
         rl.accion = AccionLinea.INSERT
-        rl.nota = "DRY-RUN | TRASPASO CAJA CHICA (sobrante TDC)"
+        rl.nota = "DRY-RUN | AJUSTE BANCARIO (sobrante TDC)"
         return
 
-    plan_traspaso = _construir_plan_traspaso_caja_chica(
-        mov, fecha, desde_caja_chica=True,
-    )
-    if plan_traspaso.advertencias:
+    plan = _construir_plan_ajuste_bancario(mov, fecha)
+    if plan.advertencias:
         rl.accion = AccionLinea.ERROR
-        rl.nota = plan_traspaso.advertencias[0]
+        rl.nota = plan.advertencias[0]
         return
 
-    resultado = _ejecutar_plan(plan_traspaso, connector)
+    resultado = _ejecutar_plan(plan, connector)
     if resultado.exito:
         rl.accion = AccionLinea.INSERT
         rl.resultado = resultado
         rl.folios = resultado.folios
-        rl.nota = "TRASPASO CAJA CHICA (sobrante TDC)"
+        rl.nota = "AJUSTE BANCARIO (sobrante TDC)"
     else:
         rl.accion = AccionLinea.ERROR
         rl.nota = resultado.error
