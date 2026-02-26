@@ -101,12 +101,12 @@ def insertar_factura_compra(
         datos.subtotal,             # SubTotal2 = SubTotal1
         datos.iva,
         datos.total,
-        Decimal('0'),               # Saldo = 0 (pagada inmediata)
-        datos.total,                # Pagado = Total (Tot.Pagada)
+        datos.total,                # Saldo = Total (pendiente de pago)
+        Decimal('0'),               # Pagado = 0 (aun no procesada)
         datos.factura,              # Factura (DDMMAAAA o DDMMAAAAF)
         factura_electronica,        # FacturaElectronica
         Decimal('0'),               # FacturaElectronicaTotal
-        'Tot.Pagada',               # Estatus (como produccion)
+        'Pendiente',                # Estatus (pendiente hasta que el modulo de pagos procese)
         1,                          # Procesada = true (como produccion)
         'Crédito',                  # Tipo (como produccion)
         ahora,                      # ProcesadaFecha
@@ -136,7 +136,7 @@ def insertar_factura_compra(
     ))
 
     logger.debug(
-        "INSERT SAVRecC: Serie={}, NumRec={}, Total=${:,.2f}, Estatus=Tot.Pagada",
+        "INSERT SAVRecC: Serie={}, NumRec={}, Total=${:,.2f}, Estatus=Pendiente",
         serie, num_rec, datos.total,
     )
 
@@ -174,7 +174,7 @@ def insertar_factura_compra(
         datos.proveedor,        # Proveedor
         Decimal('1.0000'),      # Cantidad
         datos.subtotal,         # Costo unitario (sin IVA)
-        datos.total,            # Costo con impuestos
+        Decimal('0'),           # CostoImp (siempre 0 en produccion)
         Decimal('16.0000'),     # PorcIva (16%)
         'PZA',                  # Unidad
         1,                      # Orden
