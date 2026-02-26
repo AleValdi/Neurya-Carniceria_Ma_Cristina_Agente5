@@ -47,6 +47,12 @@ CLASE_NOMINA = 'NOMINA'
 CLASE_FINIQUITO = 'FINIQUITO'
 TOLERANCIA_MATCH = Decimal('0.50')
 
+MESES_ES = {
+    1: 'ENERO', 2: 'FEBRERO', 3: 'MARZO', 4: 'ABRIL',
+    5: 'MAYO', 6: 'JUNIO', 7: 'JULIO', 8: 'AGOSTO',
+    9: 'SEPTIEMBRE', 10: 'OCTUBRE', 11: 'NOVIEMBRE', 12: 'DICIEMBRE',
+}
+
 
 class ProcesadorNomina:
     """Procesador para pago de nomina (E2)."""
@@ -91,7 +97,7 @@ class ProcesadorNomina:
             return plan
 
         num_nomina = datos_nomina.numero_nomina
-        concepto_base = f"NOMINA {num_nomina:02d}"
+        concepto_base = _concepto_nomina(num_nomina, fecha)
 
         # Monto del banco para validacion cruzada
         monto_banco = movimientos[0].monto if movimientos else Decimal('0')
@@ -101,7 +107,7 @@ class ProcesadorNomina:
             if not mov_nom.es_principal or mov_nom.monto <= 0:
                 continue
 
-            concepto_mov = f"{concepto_base} {mov_nom.tipo}"
+            concepto_mov = concepto_base
 
             _agregar_movimiento_nomina(
                 plan, fecha,
@@ -180,7 +186,7 @@ class ProcesadorNomina:
             PlanEjecucion con 1 movimiento + 2 lineas poliza, o None si no hay match.
         """
         num_nomina = datos_nomina.numero_nomina
-        concepto_base = f"NOMINA {num_nomina:02d}"
+        concepto_base = _concepto_nomina(num_nomina, fecha)
 
         # Buscar primer secundario no matcheado con monto similar
         mov_match = None
@@ -199,7 +205,7 @@ class ProcesadorNomina:
         # Marcar como matcheado para no reutilizar
         mov_match.matched = True
 
-        concepto_mov = f"{concepto_base} {mov_match.tipo}"
+        concepto_mov = concepto_base
 
         plan = PlanEjecucion(
             tipo_proceso='NOMINA_CHEQUE',
@@ -302,7 +308,7 @@ def _generar_poliza_principal(
                 tipo_ca=TipoCA.CARGO,
                 cargo=perc.monto,
                 abono=Decimal('0'),
-                concepto=f"{concepto} {perc.concepto}",
+                concepto=concepto,
             ))
             mov_num += 1
 
@@ -318,7 +324,7 @@ def _generar_poliza_principal(
                 tipo_ca=TipoCA.CARGO,
                 cargo=faltante,
                 abono=Decimal('0'),
-                concepto=f"{concepto} Otras percepciones",
+                concepto=concepto,
             ))
             mov_num += 1
     else:
@@ -330,7 +336,7 @@ def _generar_poliza_principal(
             tipo_ca=TipoCA.CARGO,
             cargo=total_percepciones_esperado,
             abono=Decimal('0'),
-            concepto=f"{concepto} SUELDOS Y SALARIOS",
+            concepto=concepto,
         ))
         mov_num += 1
 
@@ -345,7 +351,7 @@ def _generar_poliza_principal(
             tipo_ca=TipoCA.ABONO,
             cargo=Decimal('0'),
             abono=ded.monto,
-            concepto=f"{concepto} {ded.concepto}",
+            concepto=concepto,
         ))
         mov_num += 1
 
@@ -357,7 +363,7 @@ def _generar_poliza_principal(
         tipo_ca=TipoCA.ABONO,
         cargo=Decimal('0'),
         abono=datos_nomina.total_dispersion,
-        concepto=f"Banco: BANREGIO {concepto}",
+        concepto=concepto,
     ))
     mov_num += 1
 
@@ -371,7 +377,7 @@ def _generar_poliza_principal(
             tipo_ca=TipoCA.ABONO,
             cargo=Decimal('0'),
             abono=monto_acreedores,
-            concepto=f"{concepto} Acreedores Diversos Nomina",
+            concepto=concepto,
         ))
 
     return lineas
@@ -397,7 +403,7 @@ def _generar_poliza_secundaria(
             tipo_ca=TipoCA.CARGO,
             cargo=monto,
             abono=Decimal('0'),
-            concepto=f"{concepto} Acreedores Nomina",
+            concepto=concepto,
         ),
         LineaPoliza(
             movimiento=2,
@@ -406,6 +412,20 @@ def _generar_poliza_secundaria(
             tipo_ca=TipoCA.ABONO,
             cargo=Decimal('0'),
             abono=monto,
-            concepto=f"Banco: BANREGIO {concepto}",
+            concepto=concepto,
         ),
     ]
+
+
+def _concepto_nomina(num_nomina: int, fecha: date) -> str:
+    """Genera concepto de nomina en formato PROD.
+
+    Patron: "NOMINA S{num:02d}- {inicio:02d}/{fin:02d} {MES}"
+    Donde fin = fecha.day - 3, inicio = max(1, fin - 6).
+
+    Ejemplo: fecha=Feb 23, num=8 → "NOMINA S08- 14/20 FEBRERO"
+    """
+    fin_dia = max(1, fecha.day - 3)
+    inicio_dia = max(1, fin_dia - 6)
+    mes_nombre = MESES_ES[fecha.month]
+    return f"NOMINA S{num_nomina:02d}- {inicio_dia:02d}/{fin_dia:02d} {mes_nombre}"

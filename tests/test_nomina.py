@@ -230,7 +230,10 @@ class TestDispersion:
             datos_nomina=datos,
         )
 
-        assert 'NOMINA 03' in plan.movimientos_pm[0].concepto
+        # Concepto formato PROD: "NOMINA S03- 01/04 FEBRERO"
+        concepto = plan.movimientos_pm[0].concepto
+        assert 'NOMINA S03-' in concepto
+        assert 'FEBRERO' in concepto
 
 
 class TestCobroCheque:

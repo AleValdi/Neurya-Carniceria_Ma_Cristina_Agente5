@@ -27,6 +27,8 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
     ahora = datetime.now()
     # HoraAlta usa base 1899-12-30 con la hora del dia
     hora_alta = datetime(1899, 12, 30, ahora.hour, ahora.minute, ahora.second)
+    # FechaAlta y UltimoCambio: fecha sin hora (00:00:00.000)
+    fecha_alta = datetime(ahora.year, ahora.month, ahora.day)
     # FechaMov = fecha del movimiento bancario (Age/Mes/Dia), sin hora
     fecha_mov = datetime(datos.age, datos.mes, datos.dia)
 
@@ -95,10 +97,10 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         'AGENTE5',
         5,
         Decimal('0'),
-        ahora,
+        fecha_alta,
         hora_alta,
         fecha_mov,
-        ahora,                              # UltimoCambio = FechaAlta
+        fecha_alta,                         # UltimoCambio = FechaAlta (sin hora)
         datos.num_factura,
         datos.referencia,
         datos.referencia2,
@@ -111,7 +113,7 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
         datos.cheque_para,
         datos.pago_afectado,
         datos.num_pagos,
-        datos.fecha_cheque_cobrado,
+        fecha_alta,                         # FechaChequeCobrado = FechaAlta
         datos.valor_pagado_tasa15,
         datos.valor_pagado_imp_tasa15,
         datos.estatus,
@@ -129,15 +131,25 @@ def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
     return folio
 
 
-def actualizar_num_poliza(cursor, folio: int, num_poliza: int):
-    """Actualiza el NumPoliza de un movimiento despues de crear la poliza."""
+def actualizar_num_poliza(
+    cursor,
+    folio: int,
+    num_poliza: int,
+    poliza_cargos: Decimal = Decimal('0'),
+    poliza_abonos: Decimal = Decimal('0'),
+):
+    """Actualiza NumPoliza y totales de poliza despues de crear la poliza."""
     cursor.execute("""
         UPDATE SAVCheqPM
-        SET NumPoliza = ?
+        SET NumPoliza = ?, PolizaCargos = ?, PolizaAbonos = ?
         WHERE Folio = ?
-    """, (num_poliza, folio))
+    """, (num_poliza, poliza_cargos, poliza_abonos, folio))
 
-    logger.debug("UPDATE SAVCheqPM: Folio={} → NumPoliza={}", folio, num_poliza)
+    logger.debug(
+        "UPDATE SAVCheqPM: Folio={} → NumPoliza={}, "
+        "PolizaCargos=${:,.2f}, PolizaAbonos=${:,.2f}",
+        folio, num_poliza, poliza_cargos, poliza_abonos,
+    )
 
 
 def existe_movimiento(

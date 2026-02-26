@@ -1595,7 +1595,12 @@ def _ejecutar_plan(
                         concepto_encabezado=datos_pm.concepto,
                     )
 
-                    actualizar_num_poliza(cursor, folio, num_poliza)
+                    poliza_cargos = sum(l.cargo for l in lineas_mov)
+                    poliza_abonos = sum(l.abono for l in lineas_mov)
+                    actualizar_num_poliza(
+                        cursor, folio, num_poliza,
+                        poliza_cargos, poliza_abonos,
+                    )
 
                 monto = datos_pm.ingreso if datos_pm.ingreso > 0 else datos_pm.egreso
                 logger.info(
@@ -1704,9 +1709,18 @@ def _ejecutar_conciliacion(
                         tipo_poliza='EGRESO',
                         concepto_encabezado=conc.get('descripcion', ''),
                     )
+                    # Actualizar PolizaCargos/PolizaAbonos
+                    poliza_cargos = sum(l.cargo for l in lineas)
+                    poliza_abonos = sum(l.abono for l in lineas)
+                    cursor.execute("""
+                        UPDATE SAVCheqPM
+                        SET PolizaCargos = ?, PolizaAbonos = ?
+                        WHERE Folio = ?
+                    """, (poliza_cargos, poliza_abonos, folio))
                     logger.info(
-                        "Poliza pago: Folio {} → Poliza {} ({} lineas)",
-                        folio, num_poliza, num_lineas,
+                        "Poliza pago: Folio {} → Poliza {} ({} lineas, "
+                        "Cargos=${:,.2f})",
+                        folio, num_poliza, num_lineas, poliza_cargos,
                     )
                     poliza_offset += num_lineas
 
