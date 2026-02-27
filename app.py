@@ -29,7 +29,10 @@ from src.models import AccionLinea, ResultadoLinea, TipoProceso
 from src.orquestador_unificado import procesar_estado_cuenta
 from src.reports.reporte_demo import generar_reporte_estado_cuenta
 
-load_dotenv()
+# Ruta al Agente 4 (se importa lazy en _importar_agente4())
+_AGENTE4_PATH = Path(__file__).resolve().parent.parent / 'Agente4' / 'conciliacion-sat-erp'
+
+load_dotenv(Path(__file__).resolve().parent / '.env')
 
 # ---------------------------------------------------------------------------
 # Configuracion de pagina
@@ -170,6 +173,10 @@ def guardar_archivo_subido(periodo: str, categoria: CategoriaArchivo,
     """Guarda un archivo subido via Streamlit en la carpeta entrada/."""
     carpeta = obtener_ruta_periodo(periodo) / categoria.id / 'entrada'
     carpeta.mkdir(parents=True, exist_ok=True)
+    # Si la categoria solo acepta 1 archivo, eliminar los existentes
+    if not categoria.multiple:
+        for existente in listar_archivos_entrada(periodo, categoria):
+            existente.unlink()
     destino = carpeta / archivo_subido.name
     with open(destino, 'wb') as f:
         f.write(archivo_subido.getbuffer())
@@ -533,11 +540,18 @@ def mostrar_resumen_resultados(resultados: List[ResultadoLinea]):
 # UI: Sidebar
 # ---------------------------------------------------------------------------
 
+_PAGINAS = [
+    "Agente5 — Conciliacion Bancaria",
+    "Agente4 — Conciliacion SAT",
+]
+
+
 def render_sidebar():
-    """Renderiza el sidebar con selector de periodo y estado de conexion."""
+    """Renderiza el sidebar con selector de pagina, periodo y estado de conexion."""
     with st.sidebar:
-        st.title("Agente5")
-        st.caption("Conciliacion Bancaria")
+        # Selector de pagina
+        pagina = st.radio("Modulo", _PAGINAS, label_visibility="collapsed")
+        st.session_state['pagina'] = pagina
 
         st.divider()
 
@@ -623,6 +637,7 @@ def render_tab_archivos():
                 for archivo in archivos_subidos:
                     ruta = guardar_archivo_subido(periodo, cat, archivo)
                     st.success(f"Guardado: {ruta.name}")
+                st.rerun()
 
     # --- Ajustes de impuestos (formulario) ---
     st.divider()
@@ -955,26 +970,336 @@ def render_tab_historial():
 
 
 # ---------------------------------------------------------------------------
+# UI: Tab Conciliacion SAT
+# ---------------------------------------------------------------------------
+
+
+def _importar_agente4():
+    """Importa modulos del Agente 4 (lazy). Retorna None si no disponible.
+
+    Usa manipulacion temporal de sys.path para que 'from src.xxx' resuelva
+    al Agente 4 y no al Agente 5 (ambos tienen carpeta src/).
+    """
+    if not _AGENTE4_PATH.exists():
+        return None
+    a4 = str(_AGENTE4_PATH)
+    try:
+        sys.path.insert(0, a4)
+        # Limpiar cache de modulos src.* del Agente 5 temporalmente
+        modulos_a5 = {k: v for k, v in sys.modules.items()
+                      if k.startswith('src.') or k == 'src'}
+        for k in modulos_a5:
+            del sys.modules[k]
+
+        from src.sat.descarga import DescargadorSAT
+        from src.sat.parser import ParserCFDI
+        from src.erp.sav7 import ConectorSAV7 as ConectorSAV7_A4
+        from src.conciliacion.comparador import Comparador, ResultadoConciliacion
+        from src.reportes.generador import GeneradorReportes
+
+        return {
+            'DescargadorSAT': DescargadorSAT,
+            'ParserCFDI': ParserCFDI,
+            'ConectorSAV7': ConectorSAV7_A4,
+            'Comparador': Comparador,
+            'ResultadoConciliacion': ResultadoConciliacion,
+            'GeneradorReportes': GeneradorReportes,
+        }
+    except ImportError as e:
+        logger.error("No se pudo importar Agente 4: {}", e)
+        return None
+    finally:
+        # Restaurar: quitar Agente 4 del path y re-importar modulos Agente 5
+        if a4 in sys.path:
+            sys.path.remove(a4)
+        # Limpiar modulos del Agente 4 para que src.* vuelva a resolver al Agente 5
+        for k in list(sys.modules.keys()):
+            if k.startswith('src.') or k == 'src':
+                del sys.modules[k]
+        # Restaurar modulos Agente 5
+        sys.modules.update(modulos_a5)
+
+
+def _ejecutar_conciliacion_sat(fecha_inicio: date, fecha_fin: date, dir_xmls: Path, dir_reportes: Path):
+    """Ejecuta el pipeline completo de conciliacion SAT-ERP via Agente 4."""
+    modulos = _importar_agente4()
+    if not modulos:
+        st.error("No se pudieron importar los modulos del Agente 4.")
+        return None
+
+    rfc = os.getenv('SAT_RFC', '')
+    cert_path = os.getenv('SAT_CERT_PATH', '')
+    key_path = os.getenv('SAT_KEY_PATH', '')
+    key_password = os.getenv('SAT_KEY_PASSWORD', '').strip()
+
+    # Mapear env vars de Agente 5 → params de Agente 4
+    db_host = os.getenv('DB_SERVER', 'localhost')
+    db_name = os.getenv('DB_DATABASE', 'DBSAV71A')
+    db_user = os.getenv('DB_USERNAME', '')
+    db_password = os.getenv('DB_PASSWORD', '')
+
+    dir_xmls.mkdir(parents=True, exist_ok=True)
+    dir_reportes.mkdir(parents=True, exist_ok=True)
+
+    fecha_inicio_str = fecha_inicio.isoformat()
+    fecha_fin_str = fecha_fin.isoformat()
+
+    DescargadorSAT = modulos['DescargadorSAT']
+    ParserCFDI = modulos['ParserCFDI']
+    ConectorSAV7_A4 = modulos['ConectorSAV7']
+    Comparador = modulos['Comparador']
+    GeneradorReportes = modulos['GeneradorReportes']
+
+    # Pre-cargar certificados en nuestro contexto
+    # (evita problemas de import context del Agente 4)
+    import base64 as _b64
+    from cryptography import x509 as _x509
+    from cryptography.hazmat.primitives import serialization as _ser
+    from cryptography.hazmat.backends import default_backend as _backend
+
+    with open(cert_path, 'rb') as f:
+        _cert_data = f.read()
+    try:
+        _certificado = _x509.load_pem_x509_certificate(_cert_data, _backend())
+    except Exception:
+        _certificado = _x509.load_der_x509_certificate(_cert_data, _backend())
+    _cert_der = _certificado.public_bytes(_ser.Encoding.DER)
+    _cert_b64 = _b64.b64encode(_cert_der).decode()
+
+    with open(key_path, 'rb') as f:
+        _key_data = f.read()
+    _llave = _ser.load_pem_private_key(_key_data, password=None, backend=_backend())
+
+    with st.status("Conciliacion SAT-ERP en progreso...", expanded=True) as status:
+        # Paso 1: Descargar CFDIs del SAT
+        st.write("Descargando CFDIs del SAT (puede tardar varios minutos)...")
+
+        # Crear DescargadorSAT sin que cargue certs (usamos los nuestros)
+        DescargadorSAT._cargar_certificados_original = DescargadorSAT._cargar_certificados
+        DescargadorSAT._cargar_certificados = lambda self: None  # Skip
+        try:
+            descargador = DescargadorSAT(
+                rfc=rfc,
+                cert_path=cert_path,
+                key_path=key_path,
+                key_password=key_password,
+                output_dir=str(dir_xmls),
+            )
+        finally:
+            DescargadorSAT._cargar_certificados = DescargadorSAT._cargar_certificados_original
+            del DescargadorSAT._cargar_certificados_original
+
+        # Inyectar certs pre-cargados
+        descargador.certificado = _certificado
+        descargador.cert_der = _cert_der
+        descargador.cert_base64 = _cert_b64
+        descargador.llave_privada = _llave
+        uuids_sat = descargador.descargar_cfdis(
+            fecha_inicio=fecha_inicio_str,
+            fecha_fin=fecha_fin_str,
+            tipo_comprobante='I',
+            tipo_descarga='recibidos',
+        )
+        st.write(f"Descargados: {len(uuids_sat)} CFDIs del SAT")
+
+        # Paso 2: Parsear datos completos de XMLs
+        st.write("Parseando datos de XMLs...")
+        parser = ParserCFDI(str(dir_xmls))
+        datos_sat = parser.procesar_directorio_completo(tipo_filtro=None)
+        st.write(f"Parseados: {len(datos_sat)} CFDIs con datos completos")
+
+        # Paso 3: Consultar ERP
+        st.write("Consultando ERP...")
+        with ConectorSAV7_A4(
+            host=db_host,
+            database=db_name,
+            user=db_user,
+            password=db_password,
+        ) as erp:
+            uuids_erp_periodo = erp.obtener_uuids_por_fechas(fecha_inicio_str, fecha_fin_str)
+            uuids_erp_todos = erp.obtener_todos_los_uuids()
+            datos_erp = erp.obtener_datos_por_uuid()
+        st.write(f"ERP: {len(uuids_erp_periodo)} en periodo, {len(uuids_erp_todos)} totales")
+
+        # Paso 4: Conciliar
+        st.write("Conciliando...")
+        comparador = Comparador()
+        resultado = comparador.conciliar(uuids_sat, uuids_erp_periodo, uuids_erp_todos)
+        resultado.fecha_inicio = fecha_inicio_str
+        resultado.fecha_fin = fecha_fin_str
+        resultado.datos_sat = datos_sat
+        resultado.datos_erp = datos_erp
+
+        # Paso 5: Generar reporte CSV
+        st.write("Generando reporte...")
+        generador = GeneradorReportes(str(dir_reportes))
+        ruta_csv = generador.generar_csv_completo(resultado)
+        st.write(f"Reporte generado: {Path(ruta_csv).name}")
+
+        status.update(label="Conciliacion completada", state="complete", expanded=False)
+
+    return resultado, ruta_csv
+
+
+def render_tab_sat():
+    """Tab de Conciliacion SAT-ERP (Agente 4)."""
+    periodo = st.session_state.get('periodo', '')
+    if not periodo:
+        st.info("Seleccione un periodo en el sidebar.")
+        return
+
+    st.header("Conciliacion SAT vs ERP")
+    st.caption("Descarga CFDIs del SAT y compara UUIDs contra el ERP (Agente 4)")
+
+    # Verificar disponibilidad del Agente 4
+    if not _AGENTE4_PATH.exists():
+        st.error(f"No se encontro el Agente 4 en: {_AGENTE4_PATH}")
+        return
+
+    # Verificar credenciales FIEL
+    rfc = os.getenv('SAT_RFC', '')
+    cert_path = os.getenv('SAT_CERT_PATH', '')
+    key_path = os.getenv('SAT_KEY_PATH', '')
+
+    fiel_ok = True
+    if not rfc:
+        st.warning("Variable SAT_RFC no configurada en .env")
+        fiel_ok = False
+    if not cert_path or not Path(cert_path).exists():
+        st.warning(f"Certificado FIEL no encontrado: {cert_path or '(no configurado)'}")
+        fiel_ok = False
+    if not key_path or not Path(key_path).exists():
+        st.warning(f"Llave privada FIEL no encontrada: {key_path or '(no configurado)'}")
+        fiel_ok = False
+
+    if not fiel_ok:
+        st.error("Configure las credenciales FIEL en el archivo .env para continuar.")
+        return
+
+    st.success(f"FIEL configurada — RFC: {rfc}")
+
+    # Selector de fechas
+    anio, mes = periodo.split('-')
+    anio, mes = int(anio), int(mes)
+    primer_dia = date(anio, mes, 1)
+    if mes == 12:
+        ultimo_dia = date(anio + 1, 1, 1) - timedelta(days=1)
+    else:
+        ultimo_dia = date(anio, mes + 1, 1) - timedelta(days=1)
+
+    col1, col2 = st.columns(2)
+    with col1:
+        fecha_inicio = st.date_input("Fecha inicio", value=primer_dia, key="sat_fecha_inicio")
+    with col2:
+        fecha_fin = st.date_input("Fecha fin", value=ultimo_dia, key="sat_fecha_fin")
+
+    if fecha_inicio > fecha_fin:
+        st.error("La fecha inicio debe ser anterior a la fecha fin.")
+        return
+
+    # Directorios de salida
+    ruta_periodo = obtener_ruta_periodo(periodo)
+    dir_xmls = ruta_periodo / '10_SAT' / 'xmls'
+    dir_reportes = ruta_periodo / '10_SAT' / 'reportes'
+
+    # Boton ejecutar
+    if st.button("Ejecutar conciliacion SAT", type="primary", key="btn_sat"):
+        try:
+            result = _ejecutar_conciliacion_sat(fecha_inicio, fecha_fin, dir_xmls, dir_reportes)
+            if result:
+                resultado, ruta_csv = result
+                st.session_state['sat_resultado'] = resultado
+                st.session_state['sat_csv_path'] = ruta_csv
+        except Exception as e:
+            st.error(f"Error durante la conciliacion: {e}")
+            logger.exception("Error en conciliacion SAT")
+
+    # Mostrar resultados si existen
+    resultado = st.session_state.get('sat_resultado')
+    ruta_csv = st.session_state.get('sat_csv_path')
+
+    if resultado:
+        st.divider()
+
+        # Metricas
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Conciliados", resultado.total_conciliados)
+        col2.metric("Faltantes en ERP", resultado.total_faltantes_erp)
+        col3.metric("Faltantes en SAT", resultado.total_faltantes_sat)
+        pct = resultado.porcentaje_conciliacion
+        col4.metric("Conciliacion", f"{pct:.1f}%")
+
+        # Faltantes en ERP
+        if resultado.faltantes_en_erp:
+            with st.expander(f"Faltantes en ERP ({resultado.total_faltantes_erp})", expanded=True):
+                filas = []
+                for uuid in sorted(resultado.faltantes_en_erp):
+                    datos = resultado.datos_sat.get(uuid, {})
+                    filas.append({
+                        'UUID': uuid[:8] + '...',
+                        'RFC Emisor': datos.get('rfc_emisor', ''),
+                        'Emisor': (datos.get('nombre_emisor', '') or '')[:40],
+                        'Total': f"${float(datos.get('total', 0)):,.2f}",
+                        'Fecha': datos.get('fecha', ''),
+                    })
+                st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+
+        # Faltantes en SAT
+        if resultado.faltantes_en_sat:
+            with st.expander(f"Faltantes en SAT ({resultado.total_faltantes_sat})"):
+                filas = []
+                for uuid in sorted(resultado.faltantes_en_sat):
+                    datos = resultado.datos_erp.get(uuid, {})
+                    filas.append({
+                        'UUID': uuid[:8] + '...',
+                        'Serie': datos.get('serie', ''),
+                        'NumRec': datos.get('numrec', ''),
+                        'Proveedor': (datos.get('proveedor_nombre', '') or '')[:40],
+                        'Total': f"${float(datos.get('total', 0)):,.2f}",
+                    })
+                st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+
+        # Boton descarga CSV
+        if ruta_csv and Path(ruta_csv).exists():
+            st.divider()
+            with open(ruta_csv, 'rb') as f:
+                st.download_button(
+                    "Descargar reporte CSV completo",
+                    data=f.read(),
+                    file_name=Path(ruta_csv).name,
+                    mime='text/csv',
+                )
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 def main():
     render_sidebar()
 
-    tab_archivos, tab_procesar, tab_historial = st.tabs([
-        "📁 Archivos",
-        "⚙️ Procesar",
-        "📋 Historial",
-    ])
+    pagina = st.session_state.get('pagina', _PAGINAS[0])
 
-    with tab_archivos:
-        render_tab_archivos()
+    if pagina == _PAGINAS[0]:
+        # Agente 5 — Conciliacion Bancaria
+        tab_archivos, tab_procesar, tab_historial = st.tabs([
+            "📁 Archivos",
+            "⚙️ Procesar",
+            "📋 Historial",
+        ])
 
-    with tab_procesar:
-        render_tab_procesar()
+        with tab_archivos:
+            render_tab_archivos()
 
-    with tab_historial:
-        render_tab_historial()
+        with tab_procesar:
+            render_tab_procesar()
+
+        with tab_historial:
+            render_tab_historial()
+
+    else:
+        # Agente 4 — Conciliacion SAT
+        render_tab_sat()
 
 
 if __name__ == '__main__':
