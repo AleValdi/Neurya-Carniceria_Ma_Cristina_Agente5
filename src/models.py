@@ -364,6 +364,7 @@ class PlanEjecucion:
     compras: List[DatosCompraPM] = field(default_factory=list)
     cobros_cliente: List[DatosCobroCliente] = field(default_factory=list)
     conciliaciones: List[Dict] = field(default_factory=list)
+    ya_conciliados: List[Dict] = field(default_factory=list)
 
     # Mapeo: cuantas facturas_pmf y lineas_poliza pertenecen a cada movimiento_pm.
     # Si vacio, se asume 1 factura y 6 lineas por movimiento (patron TDC).
@@ -399,6 +400,8 @@ class ResultadoProceso:
     num_poliza: Optional[int] = None
     plan: Optional[PlanEjecucion] = None
     error: Optional[str] = None
+    movimientos_saltados: int = 0
+    movimientos_conciliados_existentes: int = 0
 
 
 # --- Resultado por linea de estado de cuenta ---

@@ -18,11 +18,12 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
 from loguru import logger
 
-from config.settings import Settings
+from config.settings import CUENTAS_BANCARIAS, CUENTA_POR_NUMERO, Settings
 from src.erp.sav7_connector import SAV7Connector
 from src.models import AccionLinea, ResultadoLinea, TipoProceso
 from src.orquestador_unificado import procesar_estado_cuenta
@@ -359,6 +360,7 @@ def verificar_conexion() -> bool:
 def ejecutar_conciliacion(
     periodo: str,
     solo_fecha: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
     dry_run: bool = True,
 ) -> Tuple[List[ResultadoLinea], Optional[Path]]:
     """Ejecuta la conciliacion y retorna resultados + ruta de reporte."""
@@ -374,15 +376,29 @@ def ejecutar_conciliacion(
         **params,
         dry_run=dry_run,
         solo_fecha=solo_fecha,
+        fecha_fin=fecha_fin,
         connector=connector,
     )
 
     # Filtrar por fecha si aplica
-    if solo_fecha:
+    if solo_fecha and not fecha_fin:
+        # Dia especifico: incluir pagos del dia anterior
         fecha_ayer = solo_fecha - timedelta(days=1)
         resultados = [
             rl for rl in resultados
             if rl.movimiento.fecha == solo_fecha
+            or (
+                rl.movimiento.fecha == fecha_ayer
+                and rl.tipo_clasificado == TipoProceso.PAGO_PROVEEDOR
+                and rl.accion in (AccionLinea.CONCILIAR, AccionLinea.SIN_PROCESAR, AccionLinea.ERROR)
+            )
+        ]
+    elif solo_fecha and fecha_fin:
+        # Rango: incluir pagos del dia anterior al inicio
+        fecha_ayer = solo_fecha - timedelta(days=1)
+        resultados = [
+            rl for rl in resultados
+            if (solo_fecha <= rl.movimiento.fecha <= fecha_fin)
             or (
                 rl.movimiento.fecha == fecha_ayer
                 and rl.tipo_clasificado == TipoProceso.PAGO_PROVEEDOR
@@ -395,7 +411,12 @@ def ejecutar_conciliacion(
     if not dry_run and resultados:
         ruta_periodo = obtener_ruta_periodo(periodo)
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        fecha_str = solo_fecha.strftime('%Y-%m-%d') if solo_fecha else 'completo'
+        if fecha_fin:
+            fecha_str = f'{solo_fecha.strftime("%Y-%m-%d")}_a_{fecha_fin.strftime("%Y-%m-%d")}'
+        elif solo_fecha:
+            fecha_str = solo_fecha.strftime('%Y-%m-%d')
+        else:
+            fecha_str = 'completo'
         nombre = f'REPORTE_{fecha_str}_{timestamp}.xlsx'
         ruta_reporte = ruta_periodo / '09_Reportes' / nombre
         ruta_reporte.parent.mkdir(parents=True, exist_ok=True)
@@ -472,9 +493,12 @@ def mostrar_resumen_resultados(resultados: List[ResultadoLinea]):
         nota = rl.nota or ''
         if fecha_max and mov.fecha < fecha_max and rl.tipo_clasificado == TipoProceso.PAGO_PROVEEDOR:
             nota = f"[Dia anterior] {nota}" if nota else "[Dia anterior]"
+        # Prefijo "Procesado" para acciones exitosas
+        if rl.accion in (AccionLinea.INSERT, AccionLinea.CONCILIAR):
+            nota = f"Procesado. {nota}" if nota else "Procesado"
         filas.append({
             'Fecha': mov.fecha.strftime('%d/%m/%Y'),
-            'Cuenta': mov.cuenta_banco,
+            'Cuenta': CUENTAS_BANCARIAS[CUENTA_POR_NUMERO[mov.cuenta_banco]].nombre if mov.cuenta_banco in CUENTA_POR_NUMERO else mov.cuenta_banco,
             'Descripcion': mov.descripcion[:60],
             'Cargo': float(mov.cargo) if mov.cargo else None,
             'Abono': float(mov.abono) if mov.abono else None,
@@ -484,7 +508,25 @@ def mostrar_resumen_resultados(resultados: List[ResultadoLinea]):
             'Nota': nota,
         })
 
-    st.dataframe(filas, use_container_width=True, height=400)
+    df = pd.DataFrame(filas)
+
+    # Colores por accion
+    _COLORES_ACCION = {
+        'INSERT': 'background-color: #d4edda',       # verde claro
+        'CONCILIAR': 'background-color: #cce5ff',    # azul claro
+        'OMITIR': 'background-color: #e2e3e5',       # gris claro
+        'ERROR': 'background-color: #f8d7da',        # rojo claro
+        'SIN_PROCESAR': 'background-color: #fff3cd',  # amarillo claro
+        'REQUIERE_REVISION': 'background-color: #fff3cd',
+        'DESCONOCIDO': '',
+    }
+
+    def _colorear_fila(row):
+        estilo = _COLORES_ACCION.get(row['Accion'], '')
+        return [estilo] * len(row)
+
+    styled = df.style.apply(_colorear_fila, axis=1)
+    st.dataframe(styled, use_container_width=True, height=400)
 
 
 # ---------------------------------------------------------------------------
@@ -763,12 +805,14 @@ def render_tab_procesar():
     anio, mes = int(partes[0]), int(partes[1])
 
     modo_fecha = st.radio(
-        "Procesar",
-        ["Dia especifico", "Todo el periodo"],
+        "Modo",
+        ["Dia especifico", "Rango de fechas"],
         horizontal=True,
     )
 
     solo_fecha = None
+    fecha_fin = None
+
     if modo_fecha == "Dia especifico":
         dia = st.number_input("Dia", min_value=1, max_value=31, value=1)
         try:
@@ -776,6 +820,26 @@ def render_tab_procesar():
         except ValueError:
             st.error("Fecha invalida")
             return
+    else:
+        col_inicio, col_fin = st.columns(2)
+        with col_inicio:
+            dia_inicio = st.number_input("Dia inicio", min_value=1, max_value=31, value=1)
+        with col_fin:
+            dia_fin = st.number_input("Dia fin", min_value=1, max_value=31, value=min(7, 28))
+        try:
+            solo_fecha = date(anio, mes, dia_inicio)
+            fecha_fin = date(anio, mes, dia_fin)
+        except ValueError:
+            st.error("Fecha invalida")
+            return
+        if fecha_fin < solo_fecha:
+            st.error("La fecha fin debe ser mayor o igual a la fecha inicio.")
+            return
+        dias_rango = (fecha_fin - solo_fecha).days + 1
+        if dias_rango > 7:
+            st.error("El rango maximo es de 7 dias.")
+            return
+        st.caption(f"Rango: {solo_fecha.strftime('%d/%m/%Y')} al {fecha_fin.strftime('%d/%m/%Y')} ({dias_rango} dias)")
 
     st.divider()
 
@@ -786,7 +850,7 @@ def render_tab_procesar():
         if st.button("Vista previa (dry-run)", type="secondary", use_container_width=True):
             with st.spinner("Ejecutando vista previa..."):
                 resultados, _ = ejecutar_conciliacion(
-                    periodo, solo_fecha=solo_fecha, dry_run=True,
+                    periodo, solo_fecha=solo_fecha, fecha_fin=fecha_fin, dry_run=True,
                 )
             st.session_state['ultimos_resultados'] = resultados
             st.session_state['ultimo_modo'] = 'dry-run'
@@ -798,7 +862,7 @@ def render_tab_procesar():
                 return
             with st.spinner("Ejecutando conciliacion..."):
                 resultados, ruta_reporte = ejecutar_conciliacion(
-                    periodo, solo_fecha=solo_fecha, dry_run=False,
+                    periodo, solo_fecha=solo_fecha, fecha_fin=fecha_fin, dry_run=False,
                 )
             st.session_state['ultimos_resultados'] = resultados
             st.session_state['ultimo_modo'] = 'ejecucion'

@@ -64,6 +64,40 @@ from src.orquestador import (
 
 
 # ---------------------------------------------------------------------------
+# Helper de idempotencia
+# ---------------------------------------------------------------------------
+
+
+def _ajustar_nota_idempotencia(
+    rl: ResultadoLinea,
+    resultado: ResultadoProceso,
+):
+    """Ajusta accion y nota si el movimiento ya existia en BD.
+
+    Llamar despues de cada _ejecutar_plan() exitoso para reflejar
+    en la nota si el movimiento fue saltado o conciliado (no insertado).
+    """
+    total_plan = resultado.movimientos_saltados + resultado.movimientos_conciliados_existentes
+    total_folios = len(resultado.folios)
+
+    if resultado.movimientos_saltados > 0 and total_folios == 0:
+        # Todos fueron saltados (ya existian y conciliados), ninguno insertado
+        rl.accion = AccionLinea.OMITIR
+        rl.nota = "Ya registrado y conciliado"
+    elif (
+        resultado.movimientos_conciliados_existentes > 0
+        and total_plan > 0
+        and total_plan == resultado.movimientos_conciliados_existentes + resultado.movimientos_saltados
+        and total_folios == resultado.movimientos_conciliados_existentes
+    ):
+        # Todos existian, algunos fueron conciliados ahora
+        rl.accion = AccionLinea.CONCILIAR
+        folio_txt = ', '.join(str(f) for f in resultado.folios)
+        rl.nota = f"Ya registrado, conciliado ahora (Folio {folio_txt})"
+        rl.folios = resultado.folios
+
+
+# ---------------------------------------------------------------------------
 # Funcion principal
 # ---------------------------------------------------------------------------
 
@@ -76,11 +110,14 @@ def procesar_estado_cuenta(
     rutas_impuestos: Optional[Dict[str, Path]] = None,
     dry_run: bool = True,
     solo_fecha: Optional[date] = None,
+    fecha_fin: Optional[date] = None,
     connector: Optional[SAV7Connector] = None,
 ) -> List[ResultadoLinea]:
     """Procesa el estado de cuenta completo, linea por linea.
 
     Parsea UNA vez, clasifica UNA vez, procesa dia por dia.
+    Si solo_fecha y fecha_fin se proporcionan, procesa el rango [solo_fecha, fecha_fin].
+    Si solo solo_fecha, procesa ese unico dia.
     Retorna un ResultadoLinea por cada linea del estado de cuenta.
     """
     # --- 1. Parsear todo UNA vez ---
@@ -178,7 +215,13 @@ def procesar_estado_cuenta(
         movs_por_fecha[mov.fecha].append(mov)
 
     fechas = sorted(movs_por_fecha.keys())
-    if solo_fecha:
+    if solo_fecha and fecha_fin:
+        # Rango de fechas [solo_fecha, fecha_fin]
+        fechas = [f for f in fechas if solo_fecha <= f <= fecha_fin]
+        if not fechas:
+            logger.warning("No hay movimientos en rango {} a {}", solo_fecha, fecha_fin)
+            return lineas
+    elif solo_fecha:
         if solo_fecha in movs_por_fecha:
             fechas = [solo_fecha]
         else:
@@ -321,6 +364,7 @@ def _procesar_traspasos(
                 idx = i * 2
                 if idx < len(resultado.folios):
                     rl.folios = resultado.folios[idx:idx + 2]
+                _ajustar_nota_idempotencia(rl, resultado)
             else:
                 rl.accion = AccionLinea.ERROR
                 rl.nota = resultado.error
@@ -387,6 +431,7 @@ def _procesar_comisiones(
                 rl.resultado = resultado
                 if folio:
                     rl.folios = [folio]
+                _ajustar_nota_idempotencia(rl, resultado)
             else:
                 rl.accion = AccionLinea.ERROR
                 rl.nota = resultado.error
@@ -485,6 +530,7 @@ def _procesar_tdc_un_corte(
             rl.resultado = resultado
             if i < len(resultado.folios):
                 rl.folios = [resultado.folios[i]]
+            _ajustar_nota_idempotencia(rl, resultado)
         else:
             rl.accion = AccionLinea.ERROR
             rl.nota = resultado.error
@@ -837,6 +883,7 @@ def _procesar_tdc_multi_corte(
                     rl.folios.append(resultado.folios[i])
                 nota = f"Corte {corte.fecha_corte} ${dep.monto:,.2f}"
                 rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
+                _ajustar_nota_idempotencia(rl, resultado)
             else:
                 rl.accion = AccionLinea.ERROR
                 rl.nota = resultado.error
@@ -878,6 +925,7 @@ def _procesar_tdc_multi_corte(
             rl.folios.extend(resultado.folios)
             nota = f"AJUSTE BANCARIO ${dep.monto:,.2f}"
             rl.nota = f"{rl.nota} + {nota}" if rl.nota else nota
+            _ajustar_nota_idempotencia(rl, resultado)
         else:
             rl.accion = AccionLinea.ERROR
             rl.nota = (
@@ -929,6 +977,7 @@ def _tdc_sobrante_a_ajuste_bancario(
         rl.resultado = resultado
         rl.folios = resultado.folios
         rl.nota = "AJUSTE BANCARIO (sobrante TDC)"
+        _ajustar_nota_idempotencia(rl, resultado)
     else:
         rl.accion = AccionLinea.ERROR
         rl.nota = resultado.error
@@ -1001,6 +1050,7 @@ def _procesar_ventas_efectivo(
                 rl.accion = AccionLinea.INSERT
                 rl.resultado = resultado
                 rl.folios = resultado.folios
+                _ajustar_nota_idempotencia(rl, resultado)
             else:
                 rl.accion = AccionLinea.ERROR
                 rl.nota = resultado.error
@@ -1066,6 +1116,7 @@ def _procesar_nomina(
             rl.resultado = resultado
             rl.folios = resultado.folios
             rl.nota = "NOMINA DISPERSION"
+            _ajustar_nota_idempotencia(rl, resultado)
         else:
             rl.accion = AccionLinea.ERROR
             rl.nota = resultado.error
@@ -1141,6 +1192,7 @@ def _procesar_cobros_cheque(
             rl.resultado = resultado
             rl.folios = resultado.folios
             rl.nota = f"{plan.descripcion} (cheque #{num_cheque})"
+            _ajustar_nota_idempotencia(rl, resultado)
         else:
             rl.accion = AccionLinea.ERROR
             rl.nota = resultado.error
@@ -1206,6 +1258,11 @@ def _procesar_conciliaciones(
                         else:
                             rl.accion = AccionLinea.ERROR
                             rl.nota = resultado.error
+                elif plan.ya_conciliados:
+                    ya = plan.ya_conciliados[0]
+                    rl.accion = AccionLinea.OMITIR
+                    rl.folios = [ya['folio']]
+                    rl.nota = ya['descripcion']
                 else:
                     rl.accion = AccionLinea.SIN_PROCESAR
                     rl.nota = (
@@ -1275,6 +1332,11 @@ def _procesar_conciliaciones(
                         else:
                             rl.accion = AccionLinea.ERROR
                             rl.nota = resultado.error
+                elif plan.ya_conciliados:
+                    ya = plan.ya_conciliados[0]
+                    rl.accion = AccionLinea.OMITIR
+                    rl.folios = [ya['folio']]
+                    rl.nota = ya['descripcion']
                 else:
                     rl.accion = AccionLinea.SIN_PROCESAR
                     rl.nota = (
@@ -1377,6 +1439,7 @@ def _procesar_impuestos(
                     rl.accion = AccionLinea.INSERT
                     rl.resultado = resultado
                     rl.folios.append(folio)
+                    _ajustar_nota_idempotencia(rl, resultado)
                     folios_asignados.add(id(mov))
                     folios_pm_asignados.add(pm_idx)
                     break
@@ -1400,6 +1463,7 @@ def _procesar_impuestos(
                     rl.accion = AccionLinea.INSERT
                     rl.resultado = resultado
                     rl.folios.extend(folios_sin_match)
+                    _ajustar_nota_idempotencia(rl, resultado)
                     folios_asignados.add(id(mov))
                     break
 

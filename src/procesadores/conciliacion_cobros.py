@@ -116,11 +116,28 @@ class ProcesadorConciliacionCobros:
                         f"${cobro_data.monto:,.2f} Cliente {cobro_data.cliente}"
                     )
                 else:
-                    plan.advertencias.append(
-                        f"REQUIERE INTERVENCION: ${mov.monto:,.2f} del {fecha} - "
-                        f"no se encontro factura pendiente "
-                        f"({mov.descripcion[:60]})"
+                    # Buscar si ya esta conciliado
+                    ya_conc = _buscar_cobro_ya_conciliado(
+                        cursor, mov.monto, fecha, mov.cuenta_banco,
                     )
+                    if ya_conc:
+                        plan.ya_conciliados.append({
+                            'folio': ya_conc['folio'],
+                            'descripcion': (
+                                f"Ya conciliado: Folio {ya_conc['folio']} "
+                                f"({ya_conc['concepto'][:40]})"
+                            ),
+                        })
+                        plan.validaciones.append(
+                            f"Ya conciliado: Cobro ${mov.monto:,.2f} -> "
+                            f"Folio {ya_conc['folio']}"
+                        )
+                    else:
+                        plan.advertencias.append(
+                            f"REQUIERE INTERVENCION: ${mov.monto:,.2f} del {fecha} - "
+                            f"no se encontro factura pendiente "
+                            f"({mov.descripcion[:60]})"
+                        )
 
         resumen_partes = [
             f"{len(movimientos)} en EdoCta",
@@ -187,6 +204,56 @@ def _buscar_cobro_en_bd(
             }
     except Exception as e:
         logger.warning("Error buscando cobro en BD: {}", e)
+
+    return None
+
+
+def _buscar_cobro_ya_conciliado(
+    cursor,
+    monto: Decimal,
+    fecha: date,
+    cuenta_banco: str,
+    tolerancia_dias: int = 0,
+    tolerancia_monto: Decimal = Decimal('0.01'),
+) -> Optional[Dict]:
+    """Busca un cobro YA conciliado en SAVCheqPM.
+
+    Se invoca solo cuando _buscar_cobro_en_bd() no encuentra match
+    (Conciliada=0). Si hay un cobro con Conciliada=1 que matchea,
+    significa que ya fue procesado previamente.
+    """
+    fecha_min = fecha - timedelta(days=tolerancia_dias)
+    fecha_max = fecha + timedelta(days=tolerancia_dias)
+
+    try:
+        cursor.execute("""
+            SELECT Folio, Ingreso, Concepto
+            FROM SAVCheqPM
+            WHERE Cuenta = ?
+              AND Tipo = ?
+              AND Conciliada = 1
+              AND DATEFROMPARTS(Age, Mes, Dia) BETWEEN ? AND ?
+              AND ABS(Ingreso - ?) <= ?
+            ORDER BY ABS(Ingreso - ?) ASC
+        """, (
+            cuenta_banco,
+            TIPO_BD,
+            fecha_min.isoformat(),
+            fecha_max.isoformat(),
+            float(monto),
+            float(tolerancia_monto),
+            float(monto),
+        ))
+
+        row = cursor.fetchone()
+        if row:
+            return {
+                'folio': row[0],
+                'ingreso': Decimal(str(row[1])),
+                'concepto': row[2].strip() if row[2] else '',
+            }
+    except Exception as e:
+        logger.warning("Error buscando cobro ya conciliado: {}", e)
 
     return None
 

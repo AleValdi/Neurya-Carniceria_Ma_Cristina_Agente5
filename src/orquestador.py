@@ -1568,6 +1568,20 @@ def _ejecutar_plan(
                                 f"Error INSERT SAVCheqPMP: {e}"
                             ) from e
 
+                        # Actualizar SAVRecC: marcar como pagada
+                        try:
+                            cursor.execute("""
+                                UPDATE SAVRecC
+                                SET Saldo = 0,
+                                    Pagado = Total,
+                                    Estatus = 'Tot.Pagada'
+                                WHERE Serie = 'F' AND NumRec = ?
+                            """, (num_rec,))
+                        except Exception as e:
+                            raise RuntimeError(
+                                f"Error UPDATE SAVRecC pagada: {e}"
+                            ) from e
+
                     compra_idx += 1
 
                 # 5-7. Poliza (solo si hay lineas para este movimiento)
@@ -1634,6 +1648,8 @@ def _ejecutar_plan(
             folios=folios_creados,
             num_poliza=num_poliza,
             plan=plan,
+            movimientos_saltados=movimientos_saltados,
+            movimientos_conciliados_existentes=movimientos_conciliados,
         )
 
     except Exception as e:
