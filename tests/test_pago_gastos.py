@@ -44,6 +44,7 @@ def _match_factura(
     proveedor='003456',
     nombre='SAM S CLUB',
     rfc='NWM9709244W4',
+    tipo_proveedor='NORMAL',
 ):
     return {
         'serie': 'F',
@@ -61,6 +62,7 @@ def _match_factura(
         'pago_rec': 42,
         'metodo_pago': 'PUE',
         'nombre_empresa': nombre,
+        'tipo_proveedor': tipo_proveedor,
     }
 
 
@@ -158,7 +160,7 @@ class TestProcesadorPagoGastos:
         assert pm.tipo_egreso == 'TARJETA'
         assert pm.clase == 'PAGOS A PROVEEDORES'
         assert pm.proveedor == '003456'
-        assert pm.tipo_proveedor == 'CAJA CHICA'
+        assert pm.tipo_proveedor == 'NORMAL'
         assert pm.concepto == 'PAGO DE FACTURAS DE COMPRAS'
         assert pm.conciliada == 1
         assert pm.pago_afectado == True
@@ -320,7 +322,7 @@ class TestDatosMovimiento:
         assert datos.egreso == Decimal('4282.00')
         assert datos.ingreso == Decimal('0')
         assert datos.tipo_egreso == 'TARJETA'
-        assert datos.tipo_proveedor == 'CAJA CHICA'
+        assert datos.tipo_proveedor == 'NORMAL'
         assert datos.conciliada == 1
         assert datos.pago_afectado == True
         assert datos.estatus == 'Afectado'
@@ -354,7 +356,7 @@ class TestBusquedaBD:
             'F', 68100, Decimal('4282.00'), Decimal('4282.00'), Decimal('590.62'),
             '003456', 'SAM S CLUB', 'NWM9709244W4',
             '10022026', date(2026, 2, 10), 'No Pagada',
-            'GASTOS FERRETE', 42, 'PUE', 'SAM S CLUB',
+            'GASTOS FERRETE', 42, 'PUE', 'SAM S CLUB', 'NORMAL',
         ][i]
         cursor.fetchone.return_value = row
 

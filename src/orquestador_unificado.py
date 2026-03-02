@@ -6,6 +6,7 @@ UNA sola vez, y retorna un ResultadoLinea por cada linea del estado de cuenta.
 """
 
 import re
+import time
 from collections import defaultdict
 from datetime import date, timedelta
 from decimal import Decimal
@@ -1406,7 +1407,12 @@ def _procesar_pago_gastos(
         cursor = _obtener_cursor_lectura(connector)
 
         try:
-            for mov in movs_gastos_ayer:
+            for idx_gasto, mov in enumerate(movs_gastos_ayer):
+                # PK de SAVCheqPM incluye HoraAlta (precision 1s).
+                # Esperar entre inserts para evitar colision.
+                if idx_gasto > 0:
+                    time.sleep(1.1)
+
                 plan = procesador.construir_plan(
                     movimientos=[mov], fecha=fecha_ayer, cursor=cursor,
                 )

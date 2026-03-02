@@ -4,6 +4,7 @@ Coordina el flujo completo: parsear archivos, clasificar movimientos,
 despachar a procesadores, validar y ejecutar (o mostrar en dry-run).
 """
 
+import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -1985,6 +1986,11 @@ def _ejecutar_pago_gastos(
             linea_idx = 0
 
             for i, datos_pm in enumerate(plan.movimientos_pm):
+                # PK de SAVCheqPM incluye HoraAlta (precision 1s).
+                # Esperar entre inserts para evitar colision.
+                if i > 0:
+                    time.sleep(1.1)
+
                 n_lineas = (
                     plan.lineas_por_movimiento[i]
                     if i < len(plan.lineas_por_movimiento)
@@ -2023,8 +2029,8 @@ def _ejecutar_pago_gastos(
                 folio = obtener_siguiente_folio(cursor)
                 folios_creados.append(folio)
 
-                # 2. INSERT SAVCheqPM
-                insertar_movimiento(cursor, datos_pm, folio)
+                # 2. INSERT SAVCheqPM (desfase evita colision PK por HoraAlta)
+                insertar_movimiento(cursor, datos_pm, folio, desfase_segundos=i)
 
                 # 3. INSERT SAVCheqPMP (vincular con factura existente)
                 serie = match_data['serie']
@@ -2035,6 +2041,7 @@ def _ejecutar_pago_gastos(
 
                 if pago_rec == 0:
                     # SAVRecPago no existe — crear
+                    tipo_prov = match_data.get('tipo_proveedor', 'NA')
                     pago_rec = insertar_rec_pago(
                         cursor,
                         serie=serie,
@@ -2049,10 +2056,10 @@ def _ejecutar_pago_gastos(
                         factura=match_data.get('factura', ''),
                         tipo_recepcion=match_data.get('tipo_recepcion', ''),
                         fpago='TARJETA',
-                        tipo_proveedor='CAJA CHICA',
+                        tipo_proveedor=tipo_prov,
                     )
                 else:
-                    # SAVRecPago existe — actualizar
+                    # SAVRecPago existe — actualizar (preservar TipoProveedor original)
                     fpago = MAPA_FPAGO.get(datos_pm.tipo_egreso, 'TARJETA')
                     referencia = f"{datos_pm.cuenta}F: {folio}"
                     cursor.execute("""
@@ -2062,7 +2069,6 @@ def _ejecutar_pago_gastos(
                             Banco = ?,
                             Referencia = ?,
                             SolicitudPago = 1,
-                            TipoProveedor = 'CAJA CHICA',
                             Paridad = 1,
                             Fecha = ?,
                             UltimoCambio = CAST(GETDATE() AS DATE),
@@ -2075,8 +2081,7 @@ def _ejecutar_pago_gastos(
                         serie, num_rec,
                     ))
                     logger.info(
-                        "RecPago: {}-{} → Estatus='Pagado', FPago='{}', "
-                        "TipoProveedor='CAJA CHICA'",
+                        "RecPago: {}-{} → Estatus='Pagado', FPago='{}'",
                         serie, num_rec, fpago,
                     )
 

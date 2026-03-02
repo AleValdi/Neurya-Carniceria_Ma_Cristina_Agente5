@@ -13,20 +13,27 @@ from src.erp.utils import numero_a_letra
 from src.models import DatosMovimientoPM
 
 
-def insertar_movimiento(cursor, datos: DatosMovimientoPM, folio: int) -> int:
+def insertar_movimiento(
+    cursor, datos: DatosMovimientoPM, folio: int,
+    desfase_segundos: int = 0,
+) -> int:
     """Inserta un movimiento bancario en SAVCheqPM.
 
     Args:
         cursor: Cursor activo (dentro de transaccion).
         datos: Datos del movimiento.
         folio: Folio asignado por consecutivos.
+        desfase_segundos: Offset en segundos para evitar colision de PK
+            cuando se insertan multiples movimientos en la misma transaccion
+            (PK incluye FechaAlta+HoraAlta, precision de 1 segundo).
 
     Returns:
         Folio del movimiento insertado.
     """
     ahora = datetime.now()
     # HoraAlta usa base 1899-12-30 con la hora del dia
-    hora_alta = datetime(1899, 12, 30, ahora.hour, ahora.minute, ahora.second)
+    hora_base = datetime(1899, 12, 30, ahora.hour, ahora.minute, ahora.second)
+    hora_alta = hora_base + timedelta(seconds=desfase_segundos) if desfase_segundos else hora_base
     # FechaAlta y UltimoCambio: fecha sin hora (00:00:00.000)
     fecha_alta = datetime(ahora.year, ahora.month, ahora.day)
     # FechaMov = fecha del movimiento bancario (Age/Mes/Dia), sin hora

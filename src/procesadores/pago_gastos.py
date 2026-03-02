@@ -15,7 +15,7 @@ Verificado contra PROD (Folio 127306):
 - SAVCheqPM: Tipo=3, Clase='PAGOS A PROVEEDORES', TipoEgreso='TARJETA'
 - SAVCheqPMP: vincula folio con factura, TipoRecepcion del proveedor
 - SAVRecPago: SolicitudPago=1, Estatus='Pagado', FPago='TARJETA',
-  TipoProveedor='CAJA CHICA', Referencia='055003730157F: {folio}'
+  TipoProveedor=(preserva el original de SAVRecPago), Referencia='055003730157F: {folio}'
 - SAVPoliza: 4 lineas (Proveedores CARGO, IVA PTE PAGO, IVA PAGADO, Banco ABONO)
 """
 
@@ -164,7 +164,8 @@ def _buscar_factura_no_pagada(
                 ISNULL(rp.TipoRecepcion, '') as TipoRecepcion,
                 ISNULL(rp.Pago, 0) as Pago,
                 ISNULL(rp.MetododePago, '') as MetododePago,
-                ISNULL(CAST(prov.Empresa AS NVARCHAR(120)), '') as NombreEmpresa
+                ISNULL(CAST(prov.Empresa AS NVARCHAR(120)), '') as NombreEmpresa,
+                ISNULL(rp.TipoProveedor, 'NA') as TipoProveedor
             FROM SAVRecC r
             LEFT JOIN SAVRecPago rp
                 ON rp.Serie = r.Serie AND rp.NumRec = r.NumRec
@@ -198,6 +199,7 @@ def _buscar_factura_no_pagada(
             'pago_rec': row[12],
             'metodo_pago': row[13].strip() if row[13] else 'PUE',
             'nombre_empresa': row[14].strip() if row[14] else '',
+            'tipo_proveedor': row[15].strip() if row[15] else 'NA',
         }
 
     except Exception as e:
@@ -261,7 +263,7 @@ def _crear_datos_movimiento(
         tipo_poliza='EGRESO',
         proveedor=match['proveedor'],
         proveedor_nombre=match['nombre_empresa'][:60],
-        tipo_proveedor='CAJA CHICA',
+        tipo_proveedor=match.get('tipo_proveedor', 'NA'),
         pago_afectado=True,
         num_pagos=1,
         estatus='Afectado',
