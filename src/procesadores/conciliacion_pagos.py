@@ -176,8 +176,8 @@ def _buscar_pago_en_bd(
 
     try:
         cursor.execute("""
-            SELECT Folio, Egreso, Concepto, Dia, Mes, Age,
-                   NumPoliza, Banco, Cuenta, TipoEgreso
+            SELECT TOP 1 Folio, Egreso, Concepto, Dia, Mes, Age,
+                   NumPoliza, Banco, Cuenta, TipoEgreso, ProveedorNombre
             FROM SAVCheqPM
             WHERE Cuenta = ?
               AND Tipo = ?
@@ -210,6 +210,7 @@ def _buscar_pago_en_bd(
             'banco': row[7].strip() if row[7] else '',
             'cuenta': row[8].strip() if row[8] else '',
             'tipo_egreso': row[9].strip() if row[9] else '',
+            'nombre_proveedor': row[10].strip() if row[10] else '',
         }
 
         # Consultar SAVCheqPMP para datos de poliza
@@ -291,7 +292,7 @@ def _enriquecer_con_pmp(cursor, result: Dict):
                    SUM(RetencionIVA) OVER () as total_retiva,
                    SUM(RetencionISR) OVER () as total_retisr,
                    Serie, NumRec, MontoPago, MontoFactura,
-                   PorcIva, MetododePago, RFC, TipoProveedor
+                   PorcIva, MetododePago, RFC
             FROM SAVCheqPMP
             WHERE Folio = ?
         """, (folio,))
@@ -315,7 +316,6 @@ def _enriquecer_con_pmp(cursor, result: Dict):
         result['porc_iva'] = Decimal(str(row[10])) if row[10] else Decimal('0')
         result['metodo_pago'] = row[11].strip() if row[11] else ''
         result['rfc'] = row[12].strip() if row[12] else ''
-        result['tipo_proveedor'] = row[13].strip() if row[13] else ''
 
         # Obtener nombre del proveedor
         if result['proveedor']:

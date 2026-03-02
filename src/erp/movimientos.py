@@ -224,10 +224,13 @@ def buscar_movimiento_existente(
 
 
 def conciliar_movimiento(cursor, folio: int):
-    """Marca un movimiento existente como conciliado (Conciliada=1)."""
+    """Marca un movimiento existente como conciliado y afectado."""
     cursor.execute("""
         UPDATE SAVCheqPM
-        SET Conciliada = 1
+        SET Conciliada = 1,
+            PagoAfectado = 1,
+            Estatus = 'Afectado',
+            ConciliadaCapturo = 'AGENTE5'
         WHERE Folio = ? AND Conciliada = 0
     """, (folio,))
     logger.info("Conciliado movimiento existente: Folio={}", folio)

@@ -217,8 +217,17 @@ def procesar_estado_cuenta(
     fechas = sorted(movs_por_fecha.keys())
     if solo_fecha and fecha_fin:
         # Rango de fechas [solo_fecha, fecha_fin]
-        fechas = [f for f in fechas if solo_fecha <= f <= fecha_fin]
-        if not fechas:
+        # Incluir TODOS los dias del rango (no solo los que tienen movimientos)
+        # para que la conciliacion con retraso de 1 dia funcione incluso
+        # cuando el dia siguiente no tiene movimientos propios.
+        fechas_con_movs = set(f for f in fechas if solo_fecha <= f <= fecha_fin)
+        todas_fechas = []
+        d = solo_fecha
+        while d <= fecha_fin:
+            todas_fechas.append(d)
+            d += timedelta(days=1)
+        fechas = todas_fechas
+        if not fechas_con_movs:
             logger.warning("No hay movimientos en rango {} a {}", solo_fecha, fecha_fin)
             return lineas
     elif solo_fecha:

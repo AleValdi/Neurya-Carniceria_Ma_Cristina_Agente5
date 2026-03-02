@@ -1696,11 +1696,15 @@ def _ejecutar_conciliacion(
                 folio = conc['folio']
                 cursor.execute("""
                     UPDATE SAVCheqPM
-                    SET Conciliada = 1
+                    SET Conciliada = 1,
+                        PagoAfectado = 1,
+                        Estatus = 'Afectado',
+                        ConciliadaCapturo = 'AGENTE5'
                     WHERE Folio = ?
                 """, (folio,))
                 logger.info(
-                    "Conciliado: Folio {} → Conciliada=1",
+                    "Conciliado: Folio {} → Conciliada=1, "
+                    "PagoAfectado=1, Estatus='Afectado'",
                     folio,
                 )
 
