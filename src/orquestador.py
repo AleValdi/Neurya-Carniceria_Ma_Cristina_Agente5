@@ -1953,3 +1953,226 @@ def _ejecutar_cobro_completo(
             error=str(e),
             plan=plan,
         )
+
+
+def _ejecutar_pago_gastos(
+    plan: PlanEjecucion,
+    connector: SAV7Connector,
+) -> ResultadoProceso:
+    """Ejecuta pagos desde cuenta gastos dentro de una transaccion.
+
+    Para cada movimiento del plan:
+    1. Verificar idempotencia (movimiento ya existe?)
+    2. INSERT SAVCheqPM (nuevo movimiento bancario)
+    3. INSERT SAVCheqPMP (vinculo movimiento ↔ factura existente)
+    4. UPDATE SAVRecPago (marcar como pagado, SolicitudPago=1)
+    5. UPDATE SAVRecC (Saldo=0, Estatus='Tot.Pagada')
+    6. INSERT SAVPoliza + UPDATE SAVCheqPM.NumPoliza
+    """
+    # Mapeo TipoEgreso → FPago para SAVRecPago
+    MAPA_FPAGO = {
+        'TARJETA': 'TARJETA',
+        'TRANSFERENCIA': 'Transferencia',
+    }
+
+    folios_creados = []
+    num_poliza = None
+    movimientos_saltados = 0
+    movimientos_conciliados = 0
+
+    try:
+        with connector.get_cursor(transaccion=True) as cursor:
+            linea_idx = 0
+
+            for i, datos_pm in enumerate(plan.movimientos_pm):
+                n_lineas = (
+                    plan.lineas_por_movimiento[i]
+                    if i < len(plan.lineas_por_movimiento)
+                    else 4
+                )
+                match_data = plan.pagos_factura_existente[i]
+
+                # CHECK: idempotencia
+                monto_check = datos_pm.egreso
+                existente = buscar_movimiento_existente(
+                    cursor, datos_pm.banco, datos_pm.cuenta,
+                    datos_pm.dia, datos_pm.mes, datos_pm.age,
+                    monto_check, False,
+                )
+
+                if existente:
+                    folio_existente, ya_conciliado = existente
+                    if not ya_conciliado:
+                        conciliar_movimiento(cursor, folio_existente)
+                        movimientos_conciliados += 1
+                        folios_creados.append(folio_existente)
+                        logger.info(
+                            "Movimiento gastos existente conciliado: Folio={}",
+                            folio_existente,
+                        )
+                    else:
+                        movimientos_saltados += 1
+                        logger.warning(
+                            "Movimiento gastos ya existe (Folio={}), saltando",
+                            folio_existente,
+                        )
+                    linea_idx += n_lineas
+                    continue
+
+                # 1. Siguiente Folio
+                folio = obtener_siguiente_folio(cursor)
+                folios_creados.append(folio)
+
+                # 2. INSERT SAVCheqPM
+                insertar_movimiento(cursor, datos_pm, folio)
+
+                # 3. INSERT SAVCheqPMP (vincular con factura existente)
+                serie = match_data['serie']
+                num_rec = match_data['num_rec']
+                iva = match_data.get('iva', Decimal('0'))
+                fecha_mov = datetime(datos_pm.age, datos_pm.mes, datos_pm.dia)
+                pago_rec = match_data.get('pago_rec', 0)
+
+                if pago_rec == 0:
+                    # SAVRecPago no existe — crear
+                    pago_rec = insertar_rec_pago(
+                        cursor,
+                        serie=serie,
+                        num_rec=num_rec,
+                        proveedor=datos_pm.proveedor,
+                        proveedor_nombre=datos_pm.proveedor_nombre,
+                        fecha=fecha_mov,
+                        monto=datos_pm.egreso,
+                        banco=datos_pm.banco,
+                        cuenta=datos_pm.cuenta,
+                        folio=folio,
+                        factura=match_data.get('factura', ''),
+                        tipo_recepcion=match_data.get('tipo_recepcion', ''),
+                        fpago='TARJETA',
+                        tipo_proveedor='CAJA CHICA',
+                    )
+                else:
+                    # SAVRecPago existe — actualizar
+                    fpago = MAPA_FPAGO.get(datos_pm.tipo_egreso, 'TARJETA')
+                    referencia = f"{datos_pm.cuenta}F: {folio}"
+                    cursor.execute("""
+                        UPDATE SAVRecPago
+                        SET Estatus = 'Pagado',
+                            FPago = ?,
+                            Banco = ?,
+                            Referencia = ?,
+                            SolicitudPago = 1,
+                            TipoProveedor = 'CAJA CHICA',
+                            Paridad = 1,
+                            Fecha = ?,
+                            UltimoCambio = CAST(GETDATE() AS DATE),
+                            UltimoCambioHora = CAST(CAST(GETDATE() AS FLOAT)
+                                - FLOOR(CAST(GETDATE() AS FLOAT)) AS DATETIME)
+                        WHERE Serie = ? AND NumRec = ?
+                    """, (
+                        fpago, datos_pm.banco, referencia,
+                        fecha_mov,
+                        serie, num_rec,
+                    ))
+                    logger.info(
+                        "RecPago: {}-{} → Estatus='Pagado', FPago='{}', "
+                        "TipoProveedor='CAJA CHICA'",
+                        serie, num_rec, fpago,
+                    )
+
+                # INSERT SAVCheqPMP
+                insertar_cheq_pmp(
+                    cursor,
+                    banco=datos_pm.banco,
+                    cuenta=datos_pm.cuenta,
+                    age=datos_pm.age,
+                    mes=datos_pm.mes,
+                    folio=folio,
+                    num_rec=num_rec,
+                    pago=pago_rec,
+                    fecha=fecha_mov,
+                    monto=datos_pm.egreso,
+                    iva=iva,
+                    factura=match_data.get('factura', ''),
+                    proveedor=datos_pm.proveedor,
+                    rfc=match_data.get('rfc', ''),
+                    tipo_recepcion=match_data.get('tipo_recepcion', ''),
+                )
+
+                # 4. UPDATE SAVRecC: marcar como pagada
+                cursor.execute("""
+                    UPDATE SAVRecC
+                    SET Saldo = 0,
+                        Pagado = Total,
+                        Estatus = 'Tot.Pagada'
+                    WHERE Serie = ? AND NumRec = ?
+                """, (serie, num_rec))
+                logger.info(
+                    "RecC: {}-{} → Saldo=0, Estatus='Tot.Pagada'",
+                    serie, num_rec,
+                )
+
+                # 5. Poliza
+                lineas_mov = plan.lineas_poliza[linea_idx:linea_idx + n_lineas]
+                linea_idx += n_lineas
+
+                # Resolver {folio} en conceptos
+                for linea in lineas_mov:
+                    if '{folio}' in linea.concepto:
+                        linea.concepto = linea.concepto.format(folio=folio)
+
+                num_poliza = 0
+                if lineas_mov:
+                    num_poliza = obtener_siguiente_poliza(cursor)
+                    insertar_poliza(
+                        cursor,
+                        num_poliza=num_poliza,
+                        lineas=lineas_mov,
+                        folio=folio,
+                        fecha=fecha_mov,
+                        tipo_poliza=datos_pm.tipo_poliza,
+                        concepto_encabezado=datos_pm.concepto,
+                    )
+                    poliza_cargos = sum(l.cargo for l in lineas_mov)
+                    poliza_abonos = sum(l.abono for l in lineas_mov)
+                    actualizar_num_poliza(
+                        cursor, folio, num_poliza,
+                        poliza_cargos, poliza_abonos,
+                    )
+
+                logger.info(
+                    "Pago gastos {}/{}: Folio={}, Poliza={}, ${:,.2f} -> {}-{}",
+                    i + 1, len(plan.movimientos_pm),
+                    folio, num_poliza, datos_pm.egreso,
+                    serie, num_rec,
+                )
+
+        if movimientos_conciliados > 0:
+            plan.validaciones.append(
+                f"{movimientos_conciliados} movimientos existentes conciliados"
+            )
+        if movimientos_saltados > 0:
+            plan.advertencias.append(
+                f"{movimientos_saltados} movimientos ya existian (saltados)"
+            )
+
+        return ResultadoProceso(
+            exito=True,
+            tipo_proceso=plan.tipo_proceso,
+            descripcion=plan.descripcion,
+            folios=folios_creados,
+            num_poliza=num_poliza,
+            plan=plan,
+            movimientos_saltados=movimientos_saltados,
+            movimientos_conciliados_existentes=movimientos_conciliados,
+        )
+
+    except Exception as e:
+        logger.error("Error ejecutando pago gastos: {}", e)
+        return ResultadoProceso(
+            exito=False,
+            tipo_proceso=plan.tipo_proceso,
+            descripcion=plan.descripcion,
+            error=str(e),
+            plan=plan,
+        )

@@ -26,6 +26,8 @@ def insertar_rec_pago(
     folio: int,
     factura: str,
     tipo_recepcion: str = 'COMISIONES BANCARIAS',
+    fpago: str = 'Transferencia',
+    tipo_proveedor: str = 'NA',
 ) -> int:
     """Inserta un registro de pago en SAVRecPago.
 
@@ -83,7 +85,7 @@ def insertar_rec_pago(
         fecha,
         monto,
         'PESOS',
-        'Transferencia',            # FPago
+        fpago,                      # FPago
         banco,
         referencia,                 # "{cuenta}F: {folio}"
         'Pagado',                   # Estatus
@@ -98,7 +100,7 @@ def insertar_rec_pago(
         hora_alta,                  # UltimoCambioHora
         1,                          # SolicitudPago
         tipo_recepcion,
-        'NA',                       # TipoProveedor
+        tipo_proveedor,             # TipoProveedor
         fecha,                      # FechaRecep
         'PUE',                      # MetododePago
     ))

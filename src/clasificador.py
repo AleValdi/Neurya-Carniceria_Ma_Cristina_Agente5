@@ -114,6 +114,13 @@ PATRONES: List[Tuple[re.Pattern, TipoProceso, Optional[str], Optional[bool]]] = 
         TipoProceso.PAGO_PROVEEDOR,
         '055003730017', False,
     ),
+
+    # --- Catch-all egresos cuenta gastos (compras con tarjeta) ---
+    (
+        re.compile(r'.+', re.IGNORECASE),
+        TipoProceso.PAGO_GASTOS,
+        '055003730157', False,
+    ),
 ]
 
 
@@ -175,6 +182,9 @@ def _clasificar_uno(mov: MovimientoBancario) -> TipoProceso:
         cuenta_destino = m.group(1)
         if _es_cuenta_propia(cuenta_destino):
             return TipoProceso.TRASPASO
+        # Cuenta gastos: crear movimiento (no existe en SAVCheqPM)
+        if mov.cuenta_banco == '055003730157':
+            return TipoProceso.PAGO_GASTOS
         return TipoProceso.PAGO_PROVEEDOR
 
     # Caso especial: "(NB) Recepcion de cuenta: XXXXXXXXXXX"

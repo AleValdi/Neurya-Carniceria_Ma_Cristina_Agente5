@@ -44,6 +44,7 @@ from src.procesadores.nomina_proc import ProcesadorNomina
 from src.procesadores.conciliacion_cobros import ProcesadorConciliacionCobros
 from src.procesadores.conciliacion_pagos import ProcesadorConciliacionPagos
 from src.procesadores.impuestos import ProcesadorImpuestos
+from src.procesadores.pago_gastos import ProcesadorPagoGastos
 from src.procesadores.traspasos import ProcesadorTraspasos
 from src.procesadores.venta_efectivo import ProcesadorVentaEfectivo
 from src.procesadores.venta_tdc import ProcesadorVentaTDC
@@ -57,6 +58,7 @@ from src.orquestador import (
     _buscar_cortes_tdc,
     _ejecutar_cobro_completo,
     _ejecutar_conciliacion,
+    _ejecutar_pago_gastos,
     _ejecutar_plan,
     _encontrar_subset_por_suma,
     _obtener_cursor_lectura,
@@ -305,6 +307,12 @@ def _procesar_dia(
 
     # 5.5 Cobros de cheque (secundarios de nomina: cheques, finiquito, etc.)
     _procesar_cobros_cheque(por_tipo, indice, fecha, datos_nomina, connector, dry_run)
+
+    # 5.6 Pagos desde cuenta gastos (crear movimiento, no conciliar)
+    _procesar_pago_gastos(
+        por_tipo, indice, fecha, connector, dry_run,
+        movs_por_fecha=movs_por_fecha,
+    )
 
     # 6. Conciliaciones (pagos + cobros)
     # Pagos a proveedores se afectan con 1 dia de retraso (dia anterior)
@@ -1356,6 +1364,92 @@ def _procesar_conciliaciones(
         finally:
             if cursor:
                 cursor.close()
+
+
+def _procesar_pago_gastos(
+    por_tipo: Dict[TipoProceso, List[MovimientoBancario]],
+    indice: Dict[int, ResultadoLinea],
+    fecha: date,
+    connector: Optional[SAV7Connector],
+    dry_run: bool,
+    movs_por_fecha: Optional[Dict] = None,
+):
+    """Procesa pagos a proveedores desde cuenta de gastos.
+
+    A diferencia de la conciliacion normal (E1), estos pagos NO pre-existen
+    en SAVCheqPM. Se busca la factura correspondiente en SAVRecC y se CREA
+    el movimiento bancario + poliza + vinculacion.
+
+    Usa retraso de 1 dia igual que pagos normales.
+    """
+    # --- Marcar pagos del dia actual como pendientes ---
+    movs_gastos_hoy = por_tipo.get(TipoProceso.PAGO_GASTOS, [])
+    for mov in movs_gastos_hoy:
+        rl = indice[id(mov)]
+        rl.accion = AccionLinea.SIN_PROCESAR
+        rl.nota = "Pendiente: se afecta al dia siguiente"
+
+    # --- Procesar pagos del dia anterior (retraso 1 dia) ---
+    fecha_ayer = fecha - timedelta(days=1)
+    movs_gastos_ayer = []
+    if movs_por_fecha:
+        for mov in movs_por_fecha.get(fecha_ayer, []):
+            if mov.tipo_proceso == TipoProceso.PAGO_GASTOS:
+                movs_gastos_ayer.append(mov)
+
+    if movs_gastos_ayer:
+        logger.info(
+            "  Pagos Gastos: {} movimientos (del {}, afectados hoy {})",
+            len(movs_gastos_ayer), fecha_ayer, fecha,
+        )
+        procesador = ProcesadorPagoGastos()
+        cursor = _obtener_cursor_lectura(connector)
+
+        try:
+            for mov in movs_gastos_ayer:
+                plan = procesador.construir_plan(
+                    movimientos=[mov], fecha=fecha_ayer, cursor=cursor,
+                )
+                rl = indice[id(mov)]
+
+                if plan.movimientos_pm:
+                    if dry_run:
+                        match_data = plan.pagos_factura_existente[0]
+                        rl.accion = AccionLinea.INSERT
+                        rl.nota = (
+                            f"DRY-RUN | Crear pago -> "
+                            f"{match_data['serie']}-{match_data['num_rec']} "
+                            f"${mov.monto:,.2f} (afectado dia {fecha})"
+                        )
+                    else:
+                        resultado = _ejecutar_pago_gastos(plan, connector)
+                        if resultado.exito:
+                            rl.accion = AccionLinea.INSERT
+                            rl.resultado = resultado
+                            rl.folios = resultado.folios
+                            _ajustar_nota_idempotencia(rl, resultado)
+                        else:
+                            rl.accion = AccionLinea.ERROR
+                            rl.nota = resultado.error
+                elif plan.ya_conciliados:
+                    ya = plan.ya_conciliados[0]
+                    rl.accion = AccionLinea.OMITIR
+                    rl.nota = ya['descripcion']
+                else:
+                    rl.accion = AccionLinea.SIN_PROCESAR
+                    rl.nota = (
+                        plan.advertencias[0]
+                        if plan.advertencias
+                        else "Sin factura en BD"
+                    )
+        finally:
+            if cursor:
+                cursor.close()
+    elif movs_gastos_hoy:
+        logger.info(
+            "  Pagos Gastos: {} del dia {} pendientes (se afectan manana)",
+            len(movs_gastos_hoy), fecha,
+        )
 
 
 def _procesar_impuestos(

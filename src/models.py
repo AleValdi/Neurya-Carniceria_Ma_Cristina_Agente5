@@ -32,6 +32,7 @@ class TipoProceso(str, Enum):
     IMPUESTO_FEDERAL = 'IMPUESTO_FEDERAL'
     IMPUESTO_ESTATAL = 'IMPUESTO_ESTATAL'
     IMPUESTO_IMSS = 'IMPUESTO_IMSS'
+    PAGO_GASTOS = 'PAGO_GASTOS'
     DESCONOCIDO = 'DESCONOCIDO'
 
 
@@ -365,6 +366,7 @@ class PlanEjecucion:
     cobros_cliente: List[DatosCobroCliente] = field(default_factory=list)
     conciliaciones: List[Dict] = field(default_factory=list)
     ya_conciliados: List[Dict] = field(default_factory=list)
+    pagos_factura_existente: List[Dict] = field(default_factory=list)
 
     # Mapeo: cuantas facturas_pmf y lineas_poliza pertenecen a cada movimiento_pm.
     # Si vacio, se asume 1 factura y 6 lineas por movimiento (patron TDC).
