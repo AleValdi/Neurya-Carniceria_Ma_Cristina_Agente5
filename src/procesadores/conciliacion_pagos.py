@@ -177,7 +177,7 @@ def _buscar_pago_en_bd(
     try:
         cursor.execute("""
             SELECT TOP 1 Folio, Egreso, Concepto, Dia, Mes, Age,
-                   NumPoliza, Banco, Cuenta, TipoEgreso, ProveedorNombre
+                   NumPoliza, Banco, Cuenta, TipoEgreso
             FROM SAVCheqPM
             WHERE Cuenta = ?
               AND Tipo = ?
@@ -210,7 +210,7 @@ def _buscar_pago_en_bd(
             'banco': row[7].strip() if row[7] else '',
             'cuenta': row[8].strip() if row[8] else '',
             'tipo_egreso': row[9].strip() if row[9] else '',
-            'nombre_proveedor': row[10].strip() if row[10] else '',
+            'nombre_proveedor': '',
         }
 
         # Consultar SAVCheqPMP para datos de poliza
@@ -280,24 +280,39 @@ def _enriquecer_con_pmp(cursor, result: Dict):
     Suma IVA, IEPS, RetIVA, RetISR de todas las facturas del pago.
     Obtiene nombre del proveedor de SAVProveedor.
     Obtiene Serie/NumRec de la factura vinculada para actualizar SAVRecC/SAVRecPago.
+
+    Usa un cursor independiente para evitar interferencia con el cursor
+    principal de _buscar_pago_en_bd (pyodbc no maneja bien resultados
+    pendientes al ejecutar queries consecutivas en el mismo cursor).
     """
     folio = result['folio']
 
     try:
-        # Agregar impuestos y datos de factura vinculada
-        cursor.execute("""
-            SELECT TOP 1 Proveedor, TipoRecepcion,
-                   SUM(Iva) OVER () as total_iva,
-                   SUM(IEPS) OVER () as total_ieps,
-                   SUM(RetencionIVA) OVER () as total_retiva,
-                   SUM(RetencionISR) OVER () as total_retisr,
-                   Serie, NumRec, MontoPago, MontoFactura,
-                   PorcIva, MetododePago, RFC
-            FROM SAVCheqPMP
-            WHERE Folio = ?
+        # Forzar encoding latin-1 para varchar con ñ/acentos (la BD usa Windows-1252)
+        import pyodbc as _pyodbc
+        cursor.connection.setdecoding(_pyodbc.SQL_CHAR, encoding='latin-1')
+        cur2 = cursor.connection.cursor()
+    except Exception as e:
+        logger.warning("No se pudo crear cursor secundario: {}", e)
+        return
+
+    try:
+        # Agregar impuestos, datos de factura y nombre proveedor en 1 query
+        cur2.execute("""
+            SELECT TOP 1 p.Proveedor, p.TipoRecepcion,
+                   SUM(p.Iva) OVER () as total_iva,
+                   SUM(p.IEPS) OVER () as total_ieps,
+                   SUM(p.RetencionIVA) OVER () as total_retiva,
+                   SUM(p.RetencionISR) OVER () as total_retisr,
+                   p.Serie, p.NumRec, p.MontoPago, p.MontoFactura,
+                   p.PorcIva, p.MetododePago, p.RFC,
+                   ISNULL(CAST(prov.Empresa AS NVARCHAR(120)), '') as NombreProveedor
+            FROM SAVCheqPMP p
+            LEFT JOIN SAVProveedor prov ON prov.Clave = p.Proveedor
+            WHERE p.Folio = ?
         """, (folio,))
 
-        row = cursor.fetchone()
+        row = cur2.fetchone()
         if not row:
             logger.debug("Sin SAVCheqPMP para Folio {}", folio)
             return
@@ -316,25 +331,15 @@ def _enriquecer_con_pmp(cursor, result: Dict):
         result['porc_iva'] = Decimal(str(row[10])) if row[10] else Decimal('0')
         result['metodo_pago'] = row[11].strip() if row[11] else ''
         result['rfc'] = row[12].strip() if row[12] else ''
-
-        # Obtener nombre del proveedor
-        if result['proveedor']:
-            cursor.execute("""
-                SELECT Empresa FROM SAVProveedor WHERE Clave = ?
-            """, (result['proveedor'],))
-            prov_row = cursor.fetchone()
-            if prov_row:
-                result['nombre_proveedor'] = (
-                    prov_row[0].strip() if prov_row[0] else ''
-                )
-            else:
-                result['nombre_proveedor'] = ''
+        result['nombre_proveedor'] = row[13].strip() if row[13] else ''
 
     except Exception as e:
         logger.warning(
             "Error consultando SAVCheqPMP/Proveedor para Folio {}: {}",
             folio, e,
         )
+    finally:
+        cur2.close()
 
 
 def _construir_lineas_poliza_pago(

@@ -120,9 +120,11 @@ class DatabaseConnection:
                 conn_str = self.config.get_connection_string(driver)
                 logger.debug("Intentando conexion con driver: {}", driver)
                 conn = pyodbc.connect(conn_str, timeout=10)
-                conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-                conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-                conn.setencoding(encoding='utf-8')
+                # SQL_CHAR (varchar): latin-1 porque la BD tiene datos con
+                # acentos/ñ almacenados en Windows-1252 (compatible latin-1)
+                conn.setdecoding(pyodbc.SQL_CHAR, encoding='latin-1')
+                conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-16-le')
+                conn.setencoding(encoding='latin-1')
                 self._connection = conn
                 logger.info(
                     "Conectado a {} con driver '{}'",
